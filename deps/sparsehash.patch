@@ -1,0 +1,290 @@
+diff -Nur sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-2.0.2-mod/src/sparsehash/internal/densehashtable.h
+--- sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h	2012-02-23 04:49:42.000000000 +0800
++++ sparsehash-2.0.2-mod/src/sparsehash/internal/densehashtable.h	2015-06-11 16:14:32.000000000 +0800
+@@ -101,6 +101,7 @@
+ #include <sparsehash/internal/libc_allocator_with_realloc.h>
+ #include <sparsehash/type_traits.h>
+ #include <stdexcept>                 // For length_error
++#include <boost/interprocess/offset_ptr.hpp>
+ 
+ _START_GOOGLE_NAMESPACE_
+ 
+@@ -160,7 +161,8 @@
+   typedef typename value_alloc_type::difference_type difference_type;
+   typedef typename value_alloc_type::size_type size_type;
+   typedef typename value_alloc_type::reference reference;
+-  typedef typename value_alloc_type::pointer pointer;
++  //typedef typename value_alloc_type::pointer pointer;
++  typedef value_type* pointer;
+ 
+   // "Real" constructor and default constructor
+   dense_hashtable_iterator(const dense_hashtable<V,K,HF,ExK,SetK,EqK,A> *h,
+@@ -213,7 +215,8 @@
+   typedef typename value_alloc_type::difference_type difference_type;
+   typedef typename value_alloc_type::size_type size_type;
+   typedef typename value_alloc_type::const_reference reference;
+-  typedef typename value_alloc_type::const_pointer pointer;
++  //typedef typename value_alloc_type::const_pointer pointer;
++  typedef const value_type* pointer;
+ 
+   // "Real" constructor and default constructor
+   dense_hashtable_const_iterator(
+@@ -272,8 +275,11 @@
+   typedef typename value_alloc_type::difference_type difference_type;
+   typedef typename value_alloc_type::reference reference;
+   typedef typename value_alloc_type::const_reference const_reference;
+-  typedef typename value_alloc_type::pointer pointer;
+-  typedef typename value_alloc_type::const_pointer const_pointer;
++  //typedef typename value_alloc_type::pointer pointer;
++  typedef value_type* pointer;
++  typedef boost::interprocess::offset_ptr<Value> offset_pointer;
++  //typedef typename value_alloc_type::const_pointer const_pointer;
++  typedef const value_type* const_pointer;
+   typedef dense_hashtable_iterator<Value, Key, HashFcn,
+                                    ExtractKey, SetKey, EqualKey, Alloc>
+   iterator;
+@@ -353,7 +359,7 @@
+   // const components (they're probably pair<const X, Y>).  We use
+   // explicit destructor invocation and placement new to get around
+   // this.  Arg.
+-  void set_value(pointer dst, const_reference src) {
++  void set_value(value_type* dst, const_reference src) {
+     dst->~value_type();   // delete the old value, if any
+     new(dst) value_type(src);
+   }
+@@ -767,7 +773,7 @@
+ 
+  private:
+   void clear_to_size(size_type new_num_buckets) {
+-    if (!table) {
++    if (!table.get()) {
+       table = val_info.allocate(new_num_buckets);
+     } else {
+       destroy_buckets(0, num_buckets);
+@@ -780,7 +786,7 @@
+       }
+     }
+     assert(table);
+-    fill_range_with_empty(table, table + new_num_buckets);
++    fill_range_with_empty(table.get(), table.get() + new_num_buckets);
+     num_elements = 0;
+     num_deleted = 0;
+     num_buckets = new_num_buckets;          // our new size
+@@ -1281,7 +1287,7 @@
+   size_type num_elements;
+   size_type num_buckets;
+   ValInfo val_info;       // holds emptyval, and also the allocator
+-  pointer table;
++  offset_pointer table;
+ };
+ 
+ 
+diff -Nur sparsehash-2.0.2/src/sparsehash/internal/sparsehashtable.h sparsehash-2.0.2-mod/src/sparsehash/internal/sparsehashtable.h
+--- sparsehash-2.0.2/src/sparsehash/internal/sparsehashtable.h	2012-02-23 04:49:42.000000000 +0800
++++ sparsehash-2.0.2-mod/src/sparsehash/internal/sparsehashtable.h	2015-06-11 16:14:50.000000000 +0800
+@@ -173,7 +173,8 @@
+   typedef typename value_alloc_type::difference_type difference_type;
+   typedef typename value_alloc_type::size_type size_type;
+   typedef typename value_alloc_type::reference reference;
+-  typedef typename value_alloc_type::pointer pointer;
++  //typedef typename value_alloc_type::pointer pointer;
++  typedef value_type* pointer;
+ 
+   // "Real" constructor and default constructor
+   sparse_hashtable_iterator(const sparse_hashtable<V,K,HF,ExK,SetK,EqK,A> *h,
+@@ -225,7 +226,8 @@
+   typedef typename value_alloc_type::difference_type difference_type;
+   typedef typename value_alloc_type::size_type size_type;
+   typedef typename value_alloc_type::const_reference reference;
+-  typedef typename value_alloc_type::const_pointer pointer;
++  //typedef typename value_alloc_type::const_pointer pointer;
++  typedef const value_type* pointer;
+ 
+   // "Real" constructor and default constructor
+   sparse_hashtable_const_iterator(const sparse_hashtable<V,K,HF,ExK,SetK,EqK,A> *h,
+@@ -279,7 +281,8 @@
+   typedef typename value_alloc_type::difference_type difference_type;
+   typedef typename value_alloc_type::size_type size_type;
+   typedef typename value_alloc_type::reference reference;
+-  typedef typename value_alloc_type::pointer pointer;
++  //typedef typename value_alloc_type::pointer pointer;
++  typedef value_type* pointer;
+ 
+   // "Real" constructor and default constructor
+   sparse_hashtable_destructive_iterator(const
+@@ -333,8 +336,10 @@
+   typedef typename value_alloc_type::difference_type difference_type;
+   typedef typename value_alloc_type::reference reference;
+   typedef typename value_alloc_type::const_reference const_reference;
+-  typedef typename value_alloc_type::pointer pointer;
+-  typedef typename value_alloc_type::const_pointer const_pointer;
++  //typedef typename value_alloc_type::pointer pointer;
++  typedef value_type* pointer;
++  //typedef typename value_alloc_type::const_pointer const_pointer;
++  typedef const value_type* const_pointer;
+   typedef sparse_hashtable_iterator<Value, Key, HashFcn, ExtractKey,
+                                     SetKey, EqualKey, Alloc>
+   iterator;
+diff -Nur sparsehash-2.0.2/src/sparsehash/sparsetable sparsehash-2.0.2-mod/src/sparsehash/sparsetable
+--- sparsehash-2.0.2/src/sparsehash/sparsetable	2012-02-23 04:49:42.000000000 +0800
++++ sparsehash-2.0.2-mod/src/sparsehash/sparsetable	2015-06-11 16:14:18.000000000 +0800
+@@ -245,6 +245,8 @@
+ #include <sparsehash/type_traits.h>
+ #include <sparsehash/internal/hashtable-common.h>
+ #include <sparsehash/internal/libc_allocator_with_realloc.h>
++#include <boost/interprocess/offset_ptr.hpp>
++#include <boost/interprocess/containers/vector.hpp>
+ 
+ // A lot of work to get a type that's guaranteed to be 16 bits...
+ #ifndef HAVE_U_INT16_T
+@@ -811,6 +813,7 @@
+   typedef typename value_alloc_type::reference reference;
+   typedef typename value_alloc_type::const_reference const_reference;
+   typedef typename value_alloc_type::pointer pointer;
++  typedef boost::interprocess::offset_ptr<T> offset_pointer;
+   typedef typename value_alloc_type::const_pointer const_pointer;
+ 
+   typedef table_iterator<sparsegroup<T, GROUP_SIZE, Alloc> > iterator;
+@@ -841,13 +844,13 @@
+   const_reverse_iterator rend() const { return const_reverse_iterator(begin()); }
+ 
+   // We'll have versions for our special non-empty iterator too
+-  nonempty_iterator nonempty_begin()             { return group; }
+-  const_nonempty_iterator nonempty_begin() const { return group; }
++  nonempty_iterator nonempty_begin()             { return group.get(); }
++  const_nonempty_iterator nonempty_begin() const { return group.get(); }
+   nonempty_iterator nonempty_end() {
+-    return group + settings.num_buckets;
++    return group.get() + settings.num_buckets;
+   }
+   const_nonempty_iterator nonempty_end() const {
+-    return group + settings.num_buckets;
++    return group.get() + settings.num_buckets;
+   }
+   reverse_nonempty_iterator nonempty_rbegin() {
+     return reverse_nonempty_iterator(nonempty_end());
+@@ -893,11 +896,11 @@
+   }
+ 
+   void free_group() {
+-    if (!group)  return;
+-    pointer end_it = group + settings.num_buckets;
+-    for (pointer p = group; p != end_it; ++p)
++    if (!group.get())  return;
++    pointer end_it = group.get() + settings.num_buckets;
++    for (pointer p = group.get(); p != end_it; ++p)
+       p->~value_type();
+-    settings.deallocate(group, settings.num_buckets);
++    settings.deallocate(group.get(), settings.num_buckets);
+     group = NULL;
+   }
+ 
+@@ -992,7 +995,7 @@
+   sparsegroup(const sparsegroup& x) : group(0), settings(x.settings) {
+     if ( settings.num_buckets ) {
+       group = allocate_group(x.settings.num_buckets);
+-      std::uninitialized_copy(x.group, x.group + x.settings.num_buckets, group);
++      std::uninitialized_copy(x.group.get(), x.group.get() + x.settings.num_buckets, group.get());
+     }
+     memcpy(bitmap, x.bitmap, sizeof(bitmap));
+   }
+@@ -1007,7 +1010,7 @@
+       free_group();
+     } else {
+       pointer p = allocate_group(x.settings.num_buckets);
+-      std::uninitialized_copy(x.group, x.group + x.settings.num_buckets, p);
++      std::uninitialized_copy(x.group.get(), x.group.get() + x.settings.num_buckets, p);
+       free_group();
+       group = p;
+     }
+@@ -1084,11 +1087,12 @@
+   // pretend that move(x, y) is equivalent to "x.~T(); new(x) T(y);"
+   // which is pretty much correct, if a bit conservative.)
+   void set_aux(size_type offset, base::true_type) {
+-    group = settings.realloc_or_die(group, settings.num_buckets+1);
++    group = settings.realloc_or_die(group.get(), settings.num_buckets+1);
+     // This is equivalent to memmove(), but faster on my Intel P4,
+     // at least with gcc4.1 -O2 / glibc 2.3.6.
+     for (size_type i = settings.num_buckets; i > offset; --i)
+-      memcpy(group + i, group + i-1, sizeof(*group));
++      //memcpy(group.get() + i, group.get() + i-1, sizeof(*group));
++        *(group.get() + i) = *(group.get() + i-1);
+   }
+ 
+   // Create space at group[offset], without special assumptions about value_type
+@@ -1096,8 +1100,8 @@
+   void set_aux(size_type offset, base::false_type) {
+     // This is valid because 0 <= offset <= num_buckets
+     pointer p = allocate_group(settings.num_buckets + 1);
+-    std::uninitialized_copy(group, group + offset, p);
+-    std::uninitialized_copy(group + offset, group + settings.num_buckets,
++    std::uninitialized_copy(group.get(), group.get() + offset, p);
++    std::uninitialized_copy(group.get() + offset, group.get() + settings.num_buckets,
+                             p + offset + 1);
+     free_group();
+     group = p;
+@@ -1154,8 +1158,9 @@
+     // at lesat with gcc4.1 -O2 / glibc 2.3.6.
+     assert(settings.num_buckets > 0);
+     for (size_type i = offset; i < settings.num_buckets-1; ++i)
+-      memcpy(group + i, group + i+1, sizeof(*group));  // hopefully inlined!
+-    group = settings.realloc_or_die(group, settings.num_buckets-1);
++      //memcpy(group.get() + i, group.get() + i+1, sizeof(*group));  // hopefully inlined!
++        *(group.get() + i) = *(group.get() + i+1);
++    group = settings.realloc_or_die(group.get(), settings.num_buckets-1);
+   }
+ 
+   // Shrink the array, without any special assumptions about value_type and
+@@ -1163,8 +1168,8 @@
+   void erase_aux(size_type offset, base::false_type) {
+     // This is valid because 0 <= offset < num_buckets. Note the inequality.
+     pointer p = allocate_group(settings.num_buckets - 1);
+-    std::uninitialized_copy(group, group + offset, p);
+-    std::uninitialized_copy(group + offset + 1, group + settings.num_buckets,
++    std::uninitialized_copy(group.get(), group.get() + offset, p);
++    std::uninitialized_copy(group.get() + offset + 1, group.get() + settings.num_buckets,
+                             p + offset);
+     free_group();
+     group = p;
+@@ -1338,7 +1343,7 @@
+   };
+ 
+   // The actual data
+-  pointer group;                              // (small) array of T's
++  offset_pointer group;                              // (small) array of T's
+   Settings settings;                          // allocator and num_buckets
+   unsigned char bitmap[(GROUP_SIZE-1)/8 + 1]; // fancy math is so we round up
+ };
+@@ -1381,11 +1386,11 @@
+ 
+   // These are our special iterators, that go over non-empty buckets in a
+   // table.  These aren't const only because you can change non-empty bcks.
+-  typedef two_d_iterator< std::vector< sparsegroup<value_type, GROUP_SIZE,
++  typedef two_d_iterator< boost::interprocess::vector< sparsegroup<value_type, GROUP_SIZE,
+                                                    value_alloc_type>,
+                                   vector_alloc> >
+      nonempty_iterator;
+-  typedef const_two_d_iterator< std::vector< sparsegroup<value_type,
++  typedef const_two_d_iterator< boost::interprocess::vector< sparsegroup<value_type,
+                                                          GROUP_SIZE,
+                                                          value_alloc_type>,
+                                         vector_alloc> >
+@@ -1393,7 +1398,7 @@
+   typedef std::reverse_iterator<nonempty_iterator> reverse_nonempty_iterator;
+   typedef std::reverse_iterator<const_nonempty_iterator> const_reverse_nonempty_iterator;
+   // Another special iterator: it frees memory as it iterates (used to resize)
+-  typedef destructive_two_d_iterator< std::vector< sparsegroup<value_type,
++  typedef destructive_two_d_iterator< boost::interprocess::vector< sparsegroup<value_type,
+                                                                GROUP_SIZE,
+                                                                value_alloc_type>,
+                                               vector_alloc> >
+@@ -1442,7 +1447,8 @@
+   }
+ 
+   typedef sparsegroup<value_type, GROUP_SIZE, allocator_type> group_type;
+-  typedef std::vector<group_type, vector_alloc > group_vector_type;
++  //typedef std::vector<group_type, vector_alloc > group_vector_type;
++  typedef boost::interprocess::vector<group_type, vector_alloc > group_vector_type;
+ 
+   typedef typename group_vector_type::reference GroupsReference;
+   typedef typename group_vector_type::const_reference GroupsConstReference;

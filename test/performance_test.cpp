@@ -42,7 +42,7 @@ TEST(GetSet, Performance)
         g_test_kv->HSet(0, key, "f0", value);
     }
     int64_t end = mmkv::get_current_micros();
-    printf("###Cost %lldus to hset %llu times\n", end - start, loop);
+    printf("###Cost %lldus to hset %d times\n", end - start, loop);
     start = mmkv::get_current_micros();
     for (int i = 0; i < loop; i++)
     {
@@ -52,7 +52,7 @@ TEST(GetSet, Performance)
         g_test_kv->Set(0, key, value);
     }
     end = mmkv::get_current_micros();
-    printf("###Cost %lldus to set %llu times\n", end - start, loop);
+    printf("###Cost %lldus to set %d times\n", end - start, loop);
     start = mmkv::get_current_micros();
     for (int i = 0; i < loop; i++)
     {
@@ -62,7 +62,7 @@ TEST(GetSet, Performance)
         g_test_kv->Get(0, key, v);
     }
     end = mmkv::get_current_micros();
-    printf("###Cost %lldus to get %llu times\n", end - start, loop);
+    printf("###Cost %lldus to get %d times\n", end - start, loop);
     start = mmkv::get_current_micros();
     for (int i = 0; i < loop; i++)
     {
@@ -71,6 +71,6 @@ TEST(GetSet, Performance)
         g_test_kv->Del(0, key);
     }
     end = mmkv::get_current_micros();
-    printf("###Cost %lldus to del %llu times\n", end - start, loop);
+    printf("###Cost %lldus to del %d times\n", end - start, loop);
 }
 

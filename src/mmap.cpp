@@ -79,7 +79,7 @@ namespace mmkv
         }
         else
         {
-            if (file_st.st_size != 0 && file_st.st_size != size)
+            if (file_st.st_size != 0 && (size_t)file_st.st_size != size)
             {
                 ERROR_LOG("Failed to open write  mmap file:%s since passed size", path.c_str());
                 close(fd);

@@ -763,10 +763,9 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
                 vals = 0;
             }
         }
-        ;
-        const alloc_t& get_allocator() const
+        alloc_t get_allocator() const
         {
-            return this->alloc;
+            return alloc_t(this->alloc);
         }
         typedef __ac_hash_val_iterator <keytype_t, valtype_t> iterator;
         /** clone */

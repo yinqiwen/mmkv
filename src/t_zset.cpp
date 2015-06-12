@@ -425,7 +425,6 @@ namespace mmkv
     int MMKVImpl::ZLexCount(DBID db, const Data& key, const std::string& min, const std::string& max)
     {
         zlexrangespec range;
-        int count = 0;
         int err = 0;
         /* Parse the range arguments */
         if ((err = zslParseLexRange(min, max, &range)) != 0)
@@ -538,7 +537,6 @@ namespace mmkv
             int limit_offset, int limit_count, StringArray& vals)
     {
         zlexrangespec range;
-        int count = 0;
         int err = 0;
         /* Parse the range arguments */
         if ((err = zslParseLexRange(min, max, &range)) != 0)
@@ -572,7 +570,7 @@ namespace mmkv
         }
         while (min_it != zset->set.end())
         {
-            if (limit_count > 0 && vals.size() >= limit_count)
+            if (limit_count > 0 && vals.size() >= (size_t)limit_count)
             {
                 break;
             }
@@ -733,7 +731,6 @@ namespace mmkv
             return ERR_PERMISSION_DENIED;
         }
         zlexrangespec range;
-        int count = 0;
         int err = 0;
         /* Parse the range arguments */
         if ((err = zslParseLexRange(min, max, &range)) != 0)
@@ -936,7 +933,6 @@ namespace mmkv
             int limit_offset, int limit_count, StringArray& vals)
     {
         zlexrangespec range;
-        int count = 0;
         int err = 0;
         /* Parse the range arguments */
         if ((err = zslParseLexRange(min, max, &range)) != 0)
@@ -984,7 +980,7 @@ namespace mmkv
         if (limit_offset > 0)
         {
             size_t max_rank = btree_rank(zset->set, max_it);
-            if (max_rank < limit_offset)
+            if (max_rank < (size_t)limit_offset)
             {
                 return 0;
             }
@@ -1066,7 +1062,7 @@ namespace mmkv
         if (limit_offset > 0)
         {
             size_t max_rank = btree_rank(zset->set, max_it);
-            if (max_rank < limit_offset)
+            if (max_rank < (size_t)limit_offset)
             {
                 return 0;
             }
@@ -1078,7 +1074,6 @@ namespace mmkv
             sit = max_it;
         }
         int value_count = 0;
-        bool last_element = false;
         while (true)
         {
             if (limit_count > 0 && value_count >= limit_count)

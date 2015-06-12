@@ -44,7 +44,7 @@ namespace mmkv
         {
             index = list->size() + index;
         }
-        if (index < 0 || index >= list->size())
+        if (index < 0 || (size_t)index >= list->size())
         {
             return ERR_OFFSET_OUTRANGE;
         }
@@ -164,7 +164,7 @@ namespace mmkv
         {
             return ERR_OFFSET_OUTRANGE;
         }
-        for (int i = start; i <= end && i < list->size(); i++)
+        for (int i = start; i <= end && (size_t)i < list->size(); i++)
         {
             std::string str;
             list->at(i).ToString(str);
@@ -243,7 +243,7 @@ namespace mmkv
         {
             index = list->size() + index;
         }
-        if (index < 0 || index >= list->size())
+        if (index < 0 || (size_t)index >= list->size())
         {
             return ERR_OFFSET_OUTRANGE;
         }
@@ -265,8 +265,7 @@ namespace mmkv
         {
             return err;
         }
-        size_t llen = list->size();
-        size_t ltrim = 0, rtrim = 0;
+        int llen = list->size();
         /* convert negative indexes */
         if (start < 0)
             start = llen + start;

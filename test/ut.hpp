@@ -35,7 +35,7 @@
 #include <map>
 #include <vector>
 #include <set>
-#include <strstream>
+#include <sstream>
 #include "mmkv.hpp"
 #include "types.hpp"
 
@@ -119,10 +119,12 @@ void GTEST_TEST_CLASS_NAME_(test_case_name, test_name)::TestBody()
          (void)fprintf(stderr,               \
                         "\e[1;35m%-6s\e[m%s:%d: Assertion %s %s %s failed in %s\n",     \
                         "[FAIL]", __FILE__,__LINE__,#cond1, #cmp, #cond2, __func__);      \
-         std::strstream ss; \
+         std::stringstream ss; \
          ss << #cond1 << " == " << cond1_v << " NOT " << #cmp <<" value:" << cond2; \
+         std::string tmpstr; \
+         ss.str(tmpstr); \
          fprintf(stderr, "\e[1;35m%-6s\e[m", "[FAIL]:"); \
-         fprintf(stderr, "%s ", ss.str()); \
+         fprintf(stderr, "%s ", tmpstr.c_str()); \
          fprintf(stderr, __VA_ARGS__);\
          fprintf(stderr, "\n"); \
          exit(-1);\

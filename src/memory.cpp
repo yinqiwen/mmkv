@@ -101,18 +101,6 @@ namespace mmkv
 
     int MemorySegmentManager::Open(const OpenOptions& open_options)
     {
-
-//        char coredump_filter[1024];
-//        sprintf(coredump_filter, "%s", "/proc/self/coredump_filter");
-//        FILE *fp;
-//        if ((fp = fopen(coredump_filter, "r")) == NULL)
-//        {
-//            ERROR_LOG("Failed to open %s", coredump_filter);
-//            return -1;
-//        }
-//        fwrite("0xF", 3, 1, fp);
-//        fclose(fp);
-
         if(!is_dir_exist(open_options.dir))
         {
             if(!open_options.create_if_notexist  || open_options.readonly)
@@ -258,12 +246,17 @@ namespace mmkv
         {
             return obj.SetInteger(int_val);
         }
-        if (value.len <= 8)
+        if (value.Len() <= 8 || value.Value() == NULL)
         {
-            obj.encoding = OBJ_ENCODING_RAW;
-            obj.type = V_TYPE_STRING;
-            obj.len = value.Len();
-            memcpy(obj.data, value.Value(), value.Len());
+            if(value.Value() == NULL)
+            {
+                obj.SetInteger((int64_t)(value.Len()));
+            }else
+            {
+                obj.encoding = OBJ_ENCODING_RAW;
+                obj.len = value.Len();
+                memcpy(obj.data, value.Value(), value.Len());
+            }
             return true;
         }
         void* buf = Allocate(value.Len(), in_keyspace);

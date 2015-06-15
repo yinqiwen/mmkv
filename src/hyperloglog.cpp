@@ -642,7 +642,9 @@ namespace mmkv
          * Note that the cached cardinality is set to 0 as a side effect
          * that is exactly the cardinality of an empty HLL. */
         Object dense_value;
-        m_segment.ObjectMakeRoom(dense_value, HLL_DENSE_SIZE, false);
+        m_segment.ObjectMakeRoom(dense_value, HLL_DENSE_SIZE + 1, false);
+        //the last byte would be accessed
+        dense_value.len = HLL_DENSE_SIZE;
         //MMValue* dense_value = AllocateStringValueSpace(HLL_DENSE_SIZE, false);
         char* dense = (char*) (dense_value.WritableData());
         hdr = (struct hllhdr*) dense;

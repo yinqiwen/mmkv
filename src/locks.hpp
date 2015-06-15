@@ -71,8 +71,7 @@ namespace mmkv
             ~SpinMutexLock()
             {
             }
-    }
-    ;
+    };
 
     class SpinRWLock
     {

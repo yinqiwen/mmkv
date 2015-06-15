@@ -54,13 +54,17 @@ namespace mmkv
             SpinMutexLock m_kv_table_lock;
             Logger m_logger;
 
+            typedef std::map<uint32_t, PODestructor*> PODestructorTable;
+            PODestructorTable m_destructors;
+
             void* Malloc(size_t size);
             void Free(void* p);
             void Lock(bool readonly);
             void Unlock(bool readonly);
             bool IsLocked(bool readonly);
             int GetPOD(DBID db, const Data& key, bool created_if_notexist, uint32_t expected_type, Data& v);
-            int DelPOD(DBID db, const Data& key, uint32_t expected_type, PODestructor* des);
+            int RegisterPODDestructor(uint32_t expected_type, PODestructor* des);
+            PODestructor* GetPODDestructor(uint32_t expected_type);
             Allocator<char> GetCharAllocator();
 
             bool IsExpired(DBID db, const Data& key, const Object& obj);
@@ -88,7 +92,7 @@ namespace mmkv
             int GenericGet(MMKVTable* table, DBID db, const Data& key, std::string& value);
             int GenericDelValue(const Object& v);
             int GenericDelValue(uint32_t type, void* p);
-            int GenericDel(MMKVTable* table, const Data& key);
+            int GenericDel(MMKVTable* table, const Object& key);
             int GenericInsertValue(MMKVTable* table, const Data& key, Object& v, bool replace);
             int GenericMoveKey(DBID src_db, const Data& src_key, DBID dest_db, const Data& dest_key, bool nx);
 
@@ -336,6 +340,8 @@ namespace mmkv
             int64_t DBSize(DBID db);
             int FlushDB(DBID db);
             int FlushAll();
+
+            int RemoveExpiredKeys(uint32_t max_removed , uint32_t max_time);
 
             ~MMKVImpl();
     };

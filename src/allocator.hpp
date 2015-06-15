@@ -201,6 +201,13 @@ namespace mmkv
                 deallocate_ptr(ptr.get(), n);
             }
 
+            template <typename R>
+            void destroy(R* p)
+            {
+                p->~R();
+                deallocate_ptr((T*)p);
+            }
+
             //!Returns the number of elements that could be allocated.
             //!Never throws
             size_type max_size() const

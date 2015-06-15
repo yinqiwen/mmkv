@@ -261,7 +261,7 @@ namespace mmkv
             virtual void* Malloc(size_t size) = 0;
             virtual void Free(void* p) = 0;
             virtual int GetPOD(DBID db, const Data& key, bool created_if_notexist, uint32_t expected_type, Data& v) = 0;
-            virtual int DelPOD(DBID db, const Data& key, uint32_t expected_type, PODestructor* des) = 0;
+            virtual int RegisterPODDestructor(uint32_t expected_type, PODestructor* des) = 0;
             virtual Allocator<char> GetCharAllocator() = 0;
         public:
 
@@ -498,6 +498,13 @@ namespace mmkv
                 t->~T();
                 Free(t);
             }
+
+            template<typename T>
+            int RegisterPODType(uint32_t expected_type)
+            {
+                return RegisterPODDestructor(expected_type, PODDestructorTemplate<T>::Destruct);
+            }
+
             /*
              * 'T' MUST inherit from BasePOD
              */
@@ -535,12 +542,6 @@ namespace mmkv
                 return proxy;
             }
 
-            template<typename T>
-            int DelPOD(DBID db, const Data& key, uint32_t expected_type)
-            {
-                return DelPOD(db, key, expected_type, PODDestructorTemplate<T>::Destruct);
-            }
-
             virtual size_t KeySpaceUsed() = 0;
             virtual size_t ValueSpaceUsed() = 0;
 
@@ -551,6 +552,8 @@ namespace mmkv
             }
 
             virtual void Unlock(bool readonly) = 0;
+
+            virtual int RemoveExpiredKeys(uint32_t max_removed = 10000, uint32_t max_time = 100) = 0;
 
             virtual ~MMKV()
             {

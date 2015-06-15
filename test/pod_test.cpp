@@ -41,6 +41,7 @@ struct TestPOD
 TEST(GetSet, POD)
 {
     g_test_kv->Del(0, "mypod");
+    CHECK_EQ(int, g_test_kv->RegisterPODType<TestPOD>(1), 0, "");
     int err;
     {
         mmkv::LockedPOD<TestPOD> pod;
@@ -69,8 +70,8 @@ TEST(GetSet, POD)
         {
             g_test_kv->DeletePOD<int>(pod->intptr.get());
         }
-        g_test_kv->Del(0, "mypod");
     }
+    g_test_kv->Del(0, "mypod");
     {
         mmkv::LockedPOD<TestPOD> pod;
         g_test_kv->GetPOD(0, "mypod", false, false, 1, pod, err)();
@@ -96,7 +97,7 @@ TEST(Containers, POD)
     {
         mmkv::LockedPOD<TestPODContainer> pod;
         mmkv::Allocator<int> allocator = g_test_kv->GetAllocator<int>();
-        g_test_kv->GetPOD(0, "mypod", false, true, 1, pod, err)(allocator);
+        g_test_kv->GetPOD(0, "mypod", false, true, 2, pod, err)(allocator);
         CHECK_EQ(int, err, 0, "");
         pod->a = 1;
         pod->ids.push_back(100);
@@ -106,7 +107,7 @@ TEST(Containers, POD)
     {
         mmkv::LockedPOD<TestPODContainer> pod;
         mmkv::Allocator<int> allocator = g_test_kv->GetAllocator<int>();
-        g_test_kv->GetPOD(0, "mypod", true, false, 1, pod, err)(allocator);
+        g_test_kv->GetPOD(0, "mypod", true, false, 2, pod, err)(allocator);
         CHECK_EQ(int, err, 0, "");
         CHECK_EQ(int, pod->a, 1, "");
         CHECK_EQ(int, pod->ids.size(), 3, "");
@@ -114,11 +115,12 @@ TEST(Containers, POD)
         CHECK_EQ(int, pod->ids[1], 200, "");
         CHECK_EQ(int, pod->ids[2], 300, "");
     }
-    CHECK_EQ(int, g_test_kv->DelPOD<TestPODContainer>(0, "mypod", 1), 0, "");
+    CHECK_EQ(int, g_test_kv->RegisterPODType<TestPODContainer>(2), 0, "");
+    CHECK_EQ(int, g_test_kv->Del(0, "mypod"), 1, "");
     {
         mmkv::LockedPOD<TestPODContainer> pod;
         mmkv::Allocator<int> allocator = g_test_kv->GetAllocator<int>();
-        g_test_kv->GetPOD(0, "mypod", false, false, 1, pod, err)(allocator);
+        g_test_kv->GetPOD(0, "mypod", false, false, 2, pod, err)(allocator);
         CHECK_EQ(int, err, mmkv::ERR_ENTRY_NOT_EXIST, "");
     }
 }

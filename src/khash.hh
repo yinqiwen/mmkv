@@ -495,6 +495,9 @@ class __ac_hash_base_class
                 {
                     ::new ((void*) (new_key + k)) keytype_t;
                 }
+            }else
+            {
+                printf("####NUKK keys\n");
             }
             alloc.deallocate_ptr((char*)keys.get());
             keys = new_key;
@@ -510,7 +513,7 @@ class __ac_hash_base_class
             //keys = (keytype_t*)realloc(keys, *new_capacity * sizeof(keytype_t));
             //keys = (keytype_t*)alloc.realloc(keys.get(), *new_capacity * sizeof(keytype_t));
             keys = realloc_keys(*new_capacity);
-            if (keys == 0) return false;// insufficient memory?
+            if (keys == 0) {  printf("####NUKK keys2\n");  return false;}// insufficient memory?
             //*new_flags = (__ac_flag_t*)malloc(((*new_capacity>>__ac_FLAG_SHIFT) + 1) * sizeof(__ac_flag_t));
             *new_flags = (__ac_flag_t*)(alloc.allocate(((*new_capacity>>__ac_FLAG_SHIFT) + 1) * sizeof(__ac_flag_t)));
             if (*new_flags == 0)

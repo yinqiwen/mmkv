@@ -264,37 +264,24 @@ namespace mmkv
         return 0;
     }
 
-    int MMKVImpl::DelPOD(DBID db, const Data& key, uint32_t expected_type, PODestructor* des)
+    int MMKVImpl::RegisterPODDestructor(uint32_t expected_type, PODestructor* des)
     {
-        if (m_readonly)
+        LockGuard<SpinMutexLock> keylock_guard(m_kv_table_lock);
+        if (!m_destructors.insert(PODestructorTable::value_type(expected_type, des)).second)
         {
-            return ERR_PERMISSION_DENIED;
+            return ERR_DUPLICATE_POD_TYPE;
         }
-        MMKVTable* kv = GetMMKVTable(db, false);
-        if (NULL == kv)
-        {
-            return ERR_ENTRY_NOT_EXIST;
-        }
-        Object tmpkey(key);
-        Object* value_data = NULL;
-        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
-        MMKVTable::iterator found = kv->find(tmpkey);
-        if (found == kv->end())
-        {
-            return ERR_ENTRY_NOT_EXIST;
-        }
-        value_data = const_cast<Object*>(&(found.value()));
-        PODHeader* pod_header = (PODHeader*) (value_data->WritableData());
-        if (pod_header->type != expected_type)
-        {
-            return ERR_INVALID_POD_TYPE;
-        }
-        void* obj = value_data->WritableData() + sizeof(PODHeader);
-        (*des)(obj);
-        DestroyObjectContent(found.key());
-        DestroyObjectContent(found.value());
-        kv->erase(found);
         return 0;
+    }
+    PODestructor* MMKVImpl::GetPODDestructor(uint32_t expected_type)
+    {
+        LockGuard<SpinMutexLock> keylock_guard(m_kv_table_lock);
+        PODestructorTable::iterator found = m_destructors.find(expected_type);
+        if (found == m_destructors.end())
+        {
+            return NULL;
+        }
+        return found->second;
     }
 
     bool MMKVImpl::IsExpired(DBID db, const Data& key, const Object& obj)
@@ -420,6 +407,14 @@ namespace mmkv
             }
             case V_TYPE_POD:
             {
+                PODHeader* pod_header = (PODHeader*) ptr;
+                void* obj = (char*) ptr + sizeof(PODHeader);
+                PODestructor* des = GetPODDestructor(pod_header->type);
+                if (NULL == des)
+                {
+                    return ERR_NO_DESTRUCTOR;
+                }
+                (*des)(obj);
                 break;
             }
             default:
@@ -447,10 +442,10 @@ namespace mmkv
         }
         return err;
     }
-    int MMKVImpl::GenericDel(MMKVTable* table, const Data& key)
+    int MMKVImpl::GenericDel(MMKVTable* table, const Object& key)
     {
-        Object tmpkey(key);
-        MMKVTable::iterator found = table->find(tmpkey);
+        //Object tmpkey(key);
+        MMKVTable::iterator found = table->find(key);
         if (found != table->end())
         {
             const Object& value_data = found.value();
@@ -683,6 +678,47 @@ namespace mmkv
     {
         //TODO
         return -1;
+    }
+
+    int MMKVImpl::RemoveExpiredKeys(uint32_t max_removed, uint32_t max_time)
+    {
+        if (m_readonly)
+        {
+            return ERR_PERMISSION_DENIED;
+        }
+        uint32_t removed = 0;
+        uint64_t start = get_current_micros();
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        while (removed < max_removed && !m_ttlset->empty())
+        {
+            TTLValueSet::iterator it = m_ttlset->begin();
+            uint64_t now = get_current_micros();
+            if (now - start >= max_time * 1000)
+            {
+                return removed;
+            }
+            if (it->expireat > now)
+            {
+                return removed;
+            }
+            MMKVTable* kv = GetMMKVTable(it->key.db, false);
+            if (NULL == kv)
+            {
+                ERROR_LOG("Invalid entry for empty kv");
+            }
+            else
+            {
+                int err = GenericDel(kv, it->key.key);
+                if (0 != err)
+                {
+                    ERROR_LOG("Invalid entry for delete error:%d", err);
+                }
+            }
+            m_ttlmap->erase(it->key);
+            m_ttlset->erase(it);
+            removed++;
+        }
+        return removed;
     }
 
     MMKVImpl::~MMKVImpl()

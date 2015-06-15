@@ -172,6 +172,7 @@ namespace mmkv
         ERR_INVALID_ARGS = -1018,
         ERR_NO_DESTRUCTOR = -1019,
         ERR_INVALID_POD_TYPE = -1020,
+        ERR_DUPLICATE_POD_TYPE = -1021,
     };
 
     enum ObjectType

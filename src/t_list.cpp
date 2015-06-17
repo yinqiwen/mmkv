@@ -117,8 +117,8 @@ namespace mmkv
         }
         Object& str = list->front();
         str.ToString(val);
-        list->pop_front();
         DestroyObjectContent(str);
+        list->pop_front();
         return 0;
 
     }
@@ -294,15 +294,15 @@ namespace mmkv
         while (front_pop_count < start && !list->empty())
         {
             Object& data = list->front();
-            list->pop_front();
             DestroyObjectContent(data);
+            list->pop_front();
             front_pop_count++;
         }
         while (back_pop_count < (llen - 1 - end) && !list->empty())
         {
             Object& data = list->back();
-            list->pop_back();
             DestroyObjectContent(data);
+            list->pop_back();
             back_pop_count++;
         }
         return 0;
@@ -328,8 +328,8 @@ namespace mmkv
         }
         Object& data = list->back();
         data.ToString(val);
-        list->pop_back();
         DestroyObjectContent(data);
+        list->pop_back();
         return 0;
     }
     int MMKVImpl::RPopLPush(DBID db, const Data& source, const Data& destination, std::string& pop_value)

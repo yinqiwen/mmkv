@@ -30,6 +30,7 @@
 #include "ut.hpp"
 #include "containers.hpp"
 #include <boost/interprocess/offset_ptr.hpp>
+#include <boost/interprocess/containers/vector.hpp>
 
 struct TestPOD
 {
@@ -87,6 +88,10 @@ struct TestPODContainer
         TestPODContainer(const mmkv::Allocator<int>& allocator) :
                 a(0), ids(allocator)
         {
+        }
+        ~TestPODContainer()
+        {
+            ids.clear();
         }
 };
 

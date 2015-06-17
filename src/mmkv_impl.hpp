@@ -343,6 +343,8 @@ namespace mmkv
 
             int RemoveExpiredKeys(uint32_t max_removed , uint32_t max_time);
 
+            int SyncData();
+
             ~MMKVImpl();
     };
 

@@ -530,7 +530,6 @@ int mspace_mallopt(int, int);
 size_t mspace_max_footprint(mspace msp);
 size_t mspace_footprint(mspace msp);
 size_t mspace_used(mspace msp);
-
 #endif  /* MSPACES */
 
 #ifdef __cplusplus

@@ -721,6 +721,13 @@ namespace mmkv
         return removed;
     }
 
+    int MMKVImpl::SyncData()
+    {
+        m_segment.SyncKeySpace();
+        m_segment.SyncValueSpace();
+        return 0;
+    }
+
     MMKVImpl::~MMKVImpl()
     {
     }

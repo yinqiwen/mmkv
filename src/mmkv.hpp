@@ -555,6 +555,8 @@ namespace mmkv
 
             virtual int RemoveExpiredKeys(uint32_t max_removed = 10000, uint32_t max_time = 100) = 0;
 
+            virtual int SyncData() = 0;
+
             virtual ~MMKV()
             {
             }

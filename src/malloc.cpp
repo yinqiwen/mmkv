@@ -2912,7 +2912,7 @@ static int init_mparams(void)
             INITIAL_LOCK(&gm->mutex);
             gm->mflags = pmparams->default_mflags;
 #endif
-        } RELEASE_MAGIC_INIT_LOCK();
+        }RELEASE_MAGIC_INIT_LOCK();
 
 #ifndef WIN32
         pmparams->page_size = malloc_getpagesize;
@@ -2940,6 +2940,7 @@ static int init_mparams(void)
                 || ((pmparams->granularity & (pmparams->granularity - SIZE_T_ONE)) != 0)
                 || ((pmparams->page_size & (pmparams->page_size - SIZE_T_ONE)) != 0))
             ABORT;
+
     }
     return 0;
 }
@@ -3648,7 +3649,7 @@ static void* mmap_alloc(mstate m, size_t nb)
                 m->least_addr = mm;
             if ((m->footprint += mmsize) > m->max_footprint)
                 m->max_footprint = m->footprint;
-            assert(is_aligned(chunk2mem(p))); check_mmapped_chunk(m, p);
+            assert(is_aligned(chunk2mem(p)));check_mmapped_chunk(m, p);
             return chunk2mem(p);
         }
     }
@@ -3778,7 +3779,7 @@ static void* prepend_alloc(mstate m, char* newbase, char* oldbase, size_t nb)
             qsize += nsize;
         }
         set_free_with_pinuse(q, qsize, oldfirst);
-        insert_chunk(m, q, qsize); check_free_chunk(m, q);
+        insert_chunk(m, q, qsize);check_free_chunk(m, q);
     }
 
     check_malloced_chunk(m, chunk2mem(p), nb);
@@ -3841,225 +3842,6 @@ static void add_segment(mstate m, char* tbase, size_t tsize, flag_t mmapped)
     check_top_chunk(m, m->top);
 }
 
-/* -------------------------- System allocation -------------------------- */
-
-/* Get memory from system using MORECORE or MMAP */
-static void* sys_alloc(mstate m, size_t nb)
-{
-    char* tbase = CMFAIL;
-    size_t tsize = 0;
-    flag_t mmap_flag = 0;
-
-    init_mparams();
-
-    /* Directly map large chunks */
-    if (use_mmap(m) && nb >= pmparams->mmap_threshold)
-    {
-        void* mem = mmap_alloc(m, nb);
-        if (mem != 0)
-            return mem;
-    }
-
-    /*
-     Try getting memory in any of three ways (in most-preferred to
-     least-preferred order):
-     1. A call to MORECORE that can normally contiguously extend memory.
-     (disabled if not MORECORE_CONTIGUOUS or not HAVE_MORECORE or
-     or main space is mmapped or a previous contiguous call failed)
-     2. A call to MMAP new space (disabled if not HAVE_MMAP).
-     Note that under the default settings, if MORECORE is unable to
-     fulfill a request, and HAVE_MMAP is true, then mmap is
-     used as a noncontiguous system allocator. This is a useful backup
-     strategy for systems with holes in address spaces -- in this case
-     sbrk cannot contiguously expand the heap, but mmap may be able to
-     find space.
-     3. A call to MORECORE that cannot usually contiguously extend memory.
-     (disabled if not HAVE_MORECORE)
-     */
-
-    if (MORECORE_CONTIGUOUS && !use_noncontiguous(m))
-    {
-        char* br = CMFAIL;
-        msegmentptr ss = (m->top.get() == 0) ? 0 : segment_holding(m, (char*) m->top.get());
-        size_t asize = 0;
-        ACQUIRE_MORECORE_LOCK();
-
-        if (ss == 0)
-        { /* First time through or recovery */
-            char* base = (char*) CALL_MORECORE(0);
-            if (base != CMFAIL)
-            {
-                asize = granularity_align(nb + TOP_FOOT_SIZE + SIZE_T_ONE);
-                /* Adjust to end on a page boundary */
-                if (!is_page_aligned(base))
-                    asize += (page_align((size_t)base) - (size_t) base);
-                /* Can't call MORECORE if size is negative when treated as signed */
-                if (asize < HALF_MAX_SIZE_T && (br = (char*) (CALL_MORECORE(asize))) == base)
-                {
-                    tbase = base;
-                    tsize = asize;
-                }
-            }
-        }
-        else
-        {
-            /* Subtract out existing available top space from MORECORE request. */
-            asize = granularity_align(nb - m->topsize + TOP_FOOT_SIZE + SIZE_T_ONE);
-            /* Use mem here only if it did continuously extend old space */
-            if (asize < HALF_MAX_SIZE_T && (br = (char*) (CALL_MORECORE(asize))) == ss->base.get() + ss->size)
-            {
-                tbase = br;
-                tsize = asize;
-            }
-        }
-
-        if (tbase == CMFAIL)
-        { /* Cope with partial failure */
-            if (br != CMFAIL)
-            { /* Try to use/extend the space we did get */
-                if (asize < HALF_MAX_SIZE_T && asize < nb + TOP_FOOT_SIZE + SIZE_T_ONE)
-                {
-                    size_t esize = granularity_align(nb + TOP_FOOT_SIZE + SIZE_T_ONE - asize);
-                    if (esize < HALF_MAX_SIZE_T)
-                    {
-                        char* end = (char*) CALL_MORECORE(esize);
-                        if (end != CMFAIL)
-                            asize += esize;
-                        else
-                        { /* Can't use; try to release */
-                            (void) CALL_MORECORE(-asize);
-                            br = CMFAIL;
-                        }
-                    }
-                }
-            }
-            if (br != CMFAIL)
-            { /* Use the space we did get */
-                tbase = br;
-                tsize = asize;
-            }
-            else
-                disable_contiguous(m); /* Don't try contiguous path in the future */
-        }
-
-        RELEASE_MORECORE_LOCK();
-    }
-
-    if (HAVE_MMAP && tbase == CMFAIL)
-    { /* Try MMAP */
-        size_t req = nb + TOP_FOOT_SIZE + SIZE_T_ONE;
-        size_t rsize = granularity_align(req);
-        if (rsize > nb)
-        { /* Fail if wraps around zero */
-            char* mp = (char*) (CALL_MMAP(rsize));
-            if (mp != CMFAIL)
-            {
-                tbase = mp;
-                tsize = rsize;
-                mmap_flag = IS_MMAPPED_BIT;
-            }
-        }
-    }
-
-    if (HAVE_MORECORE && tbase == CMFAIL)
-    { /* Try noncontiguous MORECORE */
-        size_t asize = granularity_align(nb + TOP_FOOT_SIZE + SIZE_T_ONE);
-        if (asize < HALF_MAX_SIZE_T)
-        {
-            char* br = CMFAIL;
-            char* end = CMFAIL;
-            ACQUIRE_MORECORE_LOCK();
-            br = (char*) (CALL_MORECORE(asize));
-            end = (char*) (CALL_MORECORE(0));
-            RELEASE_MORECORE_LOCK();
-            if (br != CMFAIL && end != CMFAIL && br < end)
-            {
-                size_t ssize = end - br;
-                if (ssize > nb + TOP_FOOT_SIZE)
-                {
-                    tbase = br;
-                    tsize = ssize;
-                }
-            }
-        }
-    }
-
-    if (tbase != CMFAIL)
-    {
-
-        if ((m->footprint += tsize) > m->max_footprint)
-            m->max_footprint = m->footprint;
-
-        if (!is_initialized(m))
-        { /* first-time initialization */
-            m->seg.base = m->least_addr = tbase;
-            m->seg.size = tsize;
-            m->seg.sflags = mmap_flag;
-            m->magic = pmparams->magic;
-            m->release_checks = MAX_RELEASE_CHECK_RATE;
-            init_bins(m);
-#if !ONLY_MSPACES
-            if (is_global(m))
-            init_top(m, (mchunkptr)tbase, tsize - TOP_FOOT_SIZE);
-            else
-#endif
-            {
-                /* Offset top by embedded malloc_state */
-                mchunkptr mn = next_chunk(mem2chunk(m));
-                init_top(m, mn, (size_t) ((tbase + tsize) - (char*) mn) - TOP_FOOT_SIZE);
-            }
-        }
-
-        else
-        {
-            /* Try to merge with an existing segment */
-            msegmentptr sp = &m->seg;
-            /* Only consider most recent segment if traversal suppressed */
-            while (sp != 0 && tbase != sp->base.get() + sp->size)
-                sp = (NO_SEGMENT_TRAVERSAL) ? 0 : sp->next.get();
-            if (sp != 0&&
-            !is_extern_segment(sp) &&
-            (sp->sflags & IS_MMAPPED_BIT) == mmap_flag &&
-            segment_holds(sp, m->top.get()))
-            { /* append */
-                sp->size += tsize;
-                init_top(m, m->top.get(), m->topsize + tsize);
-            }
-            else
-            {
-                if (tbase < m->least_addr.get())
-                    m->least_addr = tbase;
-                sp = &m->seg;
-                while (sp != 0 && sp->base.get() != tbase + tsize)
-                    sp = (NO_SEGMENT_TRAVERSAL) ? 0 : sp->next.get();
-                if (sp != 0 && !is_extern_segment(sp) && (sp->sflags & IS_MMAPPED_BIT) == mmap_flag)
-                {
-                    char* oldbase = sp->base.get();
-                    sp->base = tbase;
-                    sp->size += tsize;
-                    return prepend_alloc(m, tbase, oldbase, nb);
-                }
-                else
-                    add_segment(m, tbase, tsize, mmap_flag);
-            }
-        }
-
-        if (nb < m->topsize)
-        { /* Allocate from new or extended top space */
-            size_t rsize = m->topsize -= nb;
-            mchunkptr p = m->top.get();
-            mchunkptr r = chunk_plus_offset(p, nb);
-            m->top = r;
-            r->head = rsize | PINUSE_BIT;
-            set_size_and_pinuse_of_inuse_chunk(m, p, nb); check_top_chunk(m, m->top.get()); check_malloced_chunk(m, chunk2mem(p), nb);
-            return chunk2mem(p);
-        }
-    }
-
-    MALLOC_FAILURE_ACTION
-    ;
-    return 0;
-}
 
 /* -----------------------  system deallocation -------------------------- */
 
@@ -4163,7 +3945,7 @@ static int sys_trim(mstate m, size_t pad)
                             if (rel_br != CMFAIL && new_br < old_br)
                                 released = old_br - new_br;
                         }
-                    } RELEASE_MORECORE_LOCK();
+                    }RELEASE_MORECORE_LOCK();
                 }
             }
 
@@ -4371,7 +4153,7 @@ static void* internal_realloc(mstate m, void* oldmem, size_t bytes)
         }
         else
         {
-            USAGE_ERROR_ACTION(m, oldmem); POSTACTION(m);
+            USAGE_ERROR_ACTION(m, oldmem);POSTACTION(m);
             return 0;
         }
 
@@ -4382,7 +4164,7 @@ static void* internal_realloc(mstate m, void* oldmem, size_t bytes)
             if (extra != 0)
             {
                 internal_free(m, extra);
-            } check_inuse_chunk(m, newp);
+            }check_inuse_chunk(m, newp);
             return chunk2mem(newp);
         }
         else
@@ -4482,7 +4264,7 @@ static void* internal_memalign(mstate m, size_t alignment, size_t bytes)
             }
 
             assert(chunksize(p) >= nb);
-            assert((((size_t)(chunk2mem(p))) % alignment) == 0); check_inuse_chunk(m, p); POSTACTION(m);
+            assert((((size_t)(chunk2mem(p))) % alignment) == 0);check_inuse_chunk(m, p);POSTACTION(m);
             if (leader != 0)
             {
                 internal_free(m, leader);
@@ -5173,6 +4955,7 @@ void* mspace_malloc(mspace msp, size_t bytes)
     {
         void* mem;
         size_t nb;
+        size_t chunk_size = 0;
         if (bytes <= MAX_SMALL_REQUEST)
         {
             bindex_t idx;
@@ -5191,6 +4974,7 @@ void* mspace_malloc(mspace msp, size_t bytes)
                 unlink_first_small_chunk(ms, b, p, idx);
                 set_inuse_and_pinuse(ms, p, small_index2size(idx));
                 mem = chunk2mem(p);
+                chunk_size = chunksize(p);
                 check_malloced_chunk(ms, mem, nb);
                 goto postaction;
             }
@@ -5221,6 +5005,7 @@ void* mspace_malloc(mspace msp, size_t bytes)
                         replace_dv(ms, r, rsize);
                     }
                     mem = chunk2mem(p);
+                    chunk_size = chunksize(p);
                     check_malloced_chunk(ms, mem, nb);
                     goto postaction;
                 }
@@ -5228,6 +5013,7 @@ void* mspace_malloc(mspace msp, size_t bytes)
                 else if (ms->treemap != 0 && (mem = tmalloc_small(ms, nb)) != 0)
                 {
                     check_malloced_chunk(ms, mem, nb);
+                    chunk_size = chunksize(mem2chunk(mem));
                     goto postaction;
                 }
             }
@@ -5240,6 +5026,7 @@ void* mspace_malloc(mspace msp, size_t bytes)
             if (ms->treemap != 0 && (mem = tmalloc_large(ms, nb)) != 0)
             {
                 check_malloced_chunk(ms, mem, nb);
+                chunk_size = chunksize(mem2chunk(mem));
                 goto postaction;
             }
         }
@@ -5264,6 +5051,7 @@ void* mspace_malloc(mspace msp, size_t bytes)
                 set_inuse_and_pinuse(ms, p, dvs);
             }
             mem = chunk2mem(p);
+            chunk_size = chunksize(p);
             check_malloced_chunk(ms, mem, nb);
             goto postaction;
         }
@@ -5277,7 +5065,8 @@ void* mspace_malloc(mspace msp, size_t bytes)
             r->head = rsize | PINUSE_BIT;
             set_size_and_pinuse_of_inuse_chunk(ms, p, nb);
             mem = chunk2mem(p);
-            check_top_chunk(ms, ms->top); check_malloced_chunk(ms, mem, nb);
+            chunk_size = chunksize(p);
+            check_top_chunk(ms, ms->top);check_malloced_chunk(ms, mem, nb);
             goto postaction;
         }
 
@@ -5285,6 +5074,7 @@ void* mspace_malloc(mspace msp, size_t bytes)
         return NULL; //do NOT allocate from sys
 
         postaction: POSTACTION(ms);
+        ms->exts += chunk_size;
         return mem;
     }
 
@@ -5296,6 +5086,7 @@ void mspace_free(mspace msp, void* mem)
     if (mem != 0)
     {
         mchunkptr p = mem2chunk(mem);
+        size_t chunk_size = chunksize(p);
 #if FOOTERS
         mstate fm = get_mstate_for(p);
 #else /* FOOTERS */
@@ -5311,7 +5102,8 @@ void mspace_free(mspace msp, void* mem)
             check_inuse_chunk(fm, p);
             if (RTCHECK(ok_address(fm, p) && ok_cinuse(p)))
             {
-                size_t psize = chunksize(p);
+                //size_t psize = chunksize(p);
+                size_t psize = chunk_size;
                 mchunkptr next = chunk_plus_offset(p, psize);
                 if (!pinuse(p))
                 {
@@ -5390,12 +5182,12 @@ void mspace_free(mspace msp, void* mem)
 
                     if (is_small(psize))
                     {
-                        insert_small_chunk(fm, p, psize); check_free_chunk(fm, p);
+                        insert_small_chunk(fm, p, psize);check_free_chunk(fm, p);
                     }
                     else
                     {
                         tchunkptr tp = (tchunkptr) p;
-                        insert_large_chunk(fm, tp, psize); check_free_chunk(fm, p);
+                        insert_large_chunk(fm, tp, psize);check_free_chunk(fm, p);
                         if (--fm->release_checks == 0)
                             release_unused_segments(fm);
                     }
@@ -5405,6 +5197,7 @@ void mspace_free(mspace msp, void* mem)
             erroraction:
             USAGE_ERROR_ACTION(fm, p);
             postaction: POSTACTION(fm);
+            fm->exts -= chunk_size;
         }
     }
 }
@@ -5560,33 +5353,34 @@ size_t mspace_used(mspace msp)
     mstate ms = (mstate) msp;
     if (ok_magic(ms))
     {
-        if (!PREACTION(m))
-        {
-            size_t fp = 0;
-            size_t used = 0;
-            check_malloc_state(m);
-            if (is_initialized(ms))
-            {
-                msegmentptr s = &ms->seg;
-                fp = ms->footprint;
-                used = fp - (ms->topsize + TOP_FOOT_SIZE);
-
-                while (s != 0)
-                {
-                    mchunkptr q = align_as_chunk(s->base.get());
-                    while (segment_holds(s, q) && q != ms->top.get() && q->head != FENCEPOST_HEAD)
-                    {
-                        if (!cinuse(q))
-                            used -= chunksize(q);
-                        q = next_chunk(q);
-                    }
-                    s = s->next.get();
-                }
-            }
-
-            POSTACTION(m);
-            return used;
-        }
+        return ms->exts;
+//        if (!PREACTION(m))
+//        {
+//            size_t fp = 0;
+//            size_t used = 0;
+//            check_malloc_state(m);
+//            if (is_initialized(ms))
+//            {
+//                msegmentptr s = &ms->seg;
+//                fp = ms->footprint;
+//                used = fp - (ms->topsize + TOP_FOOT_SIZE);
+//
+//                while (s != 0)
+//                {
+//                    mchunkptr q = align_as_chunk(s->base.get());
+//                    while (segment_holds(s, q) && q != ms->top.get() && q->head != FENCEPOST_HEAD)
+//                    {
+//                        if (!cinuse(q))
+//                            used -= chunksize(q);
+//                        q = next_chunk(q);
+//                    }
+//                    s = s->next.get();
+//                }
+//            }
+//
+//            POSTACTION(m);
+//            return used;
+//        }
     }
     else
     {

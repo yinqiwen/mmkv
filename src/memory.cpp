@@ -281,9 +281,12 @@ namespace mmkv
         {
             mspace_free(m_value_space.buf, ptr);
         }
-        else
+        else if(ptr > m_key_space.buf)
         {
             mspace_free(m_key_space.buf, ptr);
+        }else
+        {
+            abort();
         }
     }
     Allocator<char> MemorySegmentManager::GetKeySpaceAllocator()
@@ -387,6 +390,15 @@ namespace mmkv
     bool MemorySegmentManager::LockEnable()
     {
         return m_lock_enable;
+    }
+
+    int MemorySegmentManager::SyncKeySpace()
+    {
+        return msync(m_key_space.buf, m_key_space.size, MS_INVALIDATE | MS_SYNC);
+    }
+    int MemorySegmentManager::SyncValueSpace()
+    {
+        return msync(m_value_space.buf, m_value_space.size, MS_INVALIDATE | MS_SYNC);
     }
 }
 

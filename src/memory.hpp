@@ -148,6 +148,9 @@ namespace mmkv
             bool IsLocked(bool readonly);
             bool LockEnable();
 
+            int SyncKeySpace();
+            int SyncValueSpace();
+
             bool Verify();
 
     };

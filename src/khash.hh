@@ -487,7 +487,8 @@ class __ac_hash_base_class
             keytype_t* new_key = (keytype_t*)alloc.allocate(sizeof(keytype_t) * new_capacity);
             if(NULL != new_key)
             {
-                for(khashint_t k = 0; k < this->n_capacity; k++)
+                khashint_t min_size = this->n_capacity < new_capacity?this->n_capacity:new_capacity;
+                for(khashint_t k = 0; k < min_size; k++)
                 {
                     new_key[k] = keys[k];
                 }
@@ -497,7 +498,7 @@ class __ac_hash_base_class
                 }
             }else
             {
-                printf("####NUKK keys\n");
+
             }
             alloc.deallocate_ptr((char*)keys.get());
             keys = new_key;
@@ -513,7 +514,7 @@ class __ac_hash_base_class
             //keys = (keytype_t*)realloc(keys, *new_capacity * sizeof(keytype_t));
             //keys = (keytype_t*)alloc.realloc(keys.get(), *new_capacity * sizeof(keytype_t));
             keys = realloc_keys(*new_capacity);
-            if (keys == 0) {  printf("####NUKK keys2\n");  return false;}// insufficient memory?
+            if (keys == 0) {   return false;}// insufficient memory?
             //*new_flags = (__ac_flag_t*)malloc(((*new_capacity>>__ac_FLAG_SHIFT) + 1) * sizeof(__ac_flag_t));
             *new_flags = (__ac_flag_t*)(alloc.allocate(((*new_capacity>>__ac_FLAG_SHIFT) + 1) * sizeof(__ac_flag_t)));
             if (*new_flags == 0)
@@ -814,7 +815,8 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
             valtype_t* new_val = (valtype_t*) alloc.allocate(sizeof(valtype_t) * new_capacity);
             if (NULL != new_val)
             {
-                for (khashint_t k = 0; k < this->n_capacity; k++)
+                khashint_t min_size = this->n_capacity < new_capacity?this->n_capacity:new_capacity;
+                for (khashint_t k = 0; k < min_size; k++)
                 {
                     new_val[k] = vals[k];
                 }

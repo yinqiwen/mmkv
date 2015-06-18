@@ -383,8 +383,9 @@ namespace mmkv
                 StringSet::iterator it = m->begin();
                 while (it != m->end())
                 {
-                    DestroyObjectContent(*it);
+                    Object obj = *it;
                     it = m->erase(it);
+                    DestroyObjectContent(obj);
                 }
                 destroy_value(m_segment, m);
                 break;
@@ -395,8 +396,9 @@ namespace mmkv
                 SortedSet::iterator it = m->set.begin();
                 while (it != m->set.end())
                 {
-                    DestroyObjectContent(it->value);
+                    Object obj = it->value;
                     it = m->set.erase(it);
+                    DestroyObjectContent(obj);
                 }
                 destroy_value(m_segment, m);
                 break;

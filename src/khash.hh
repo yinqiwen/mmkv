@@ -841,7 +841,7 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
 //		    printf("###before rezie val[%d] = %p\n", k, vals[k].get());
 //		}
             //vals = (valtype_t*)alloc.realloc(vals.get(), sizeof(valtype_t) * new_capacity);
-            vals = realloc_value(new_capacity);
+            realloc_value(new_capacity);
             if (vals == 0)
             { // insufficient enough memory?
               //::free(new_flags);

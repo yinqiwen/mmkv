@@ -277,6 +277,10 @@ namespace mmkv
     }
     void MemorySegmentManager::Deallocate(void* ptr)
     {
+        if(NULL == ptr)
+        {
+            return;
+        }
         if (ptr > m_value_space.buf)
         {
             mspace_free(m_value_space.buf, ptr);

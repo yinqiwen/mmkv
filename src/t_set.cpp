@@ -37,7 +37,6 @@
 #define OP_INTER 3
 namespace mmkv
 {
-
     int MMKVImpl::SAdd(DBID db, const Data& key, const DataArray& elements)
     {
         if (m_readonly)

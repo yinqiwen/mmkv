@@ -760,7 +760,7 @@ namespace mmkv
         size_t removed = 0;
         while (min_it != zset->set.end())
         {
-            ScoreValue& tmp = *min_it;
+            ScoreValue tmp = *min_it;
             if (range.minex && min_cstr == tmp.value)
             {
                 min_it++;
@@ -772,9 +772,8 @@ namespace mmkv
             else
             {
                 zset->scores.erase(tmp.value);
-                ScoreValue to_remove = tmp;
                 min_it = zset->set.erase(min_it);
-                DestroyObjectContent(to_remove.value);
+                DestroyObjectContent(tmp.value);
                 removed++;
             }
         }

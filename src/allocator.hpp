@@ -184,6 +184,7 @@ namespace mmkv
 
             inline void deallocate_ptr(const T* ptr, size_type n = 1)
             {
+                if(NULL == ptr) return;
                 //mp_mngr->deallocate((void*) ipcdetail::to_raw_pointer(ptr));
                 //mspace_free(m_first_space.buf, ptr);
                 T* p = (T*) ptr;

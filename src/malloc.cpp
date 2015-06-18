@@ -3460,11 +3460,10 @@ static void internal_malloc_stats(mstate m)
     size_t K = S << leftshift_for_tree_index(I);\
     for (;;) {\
       if (chunksize(T) != S) {\
-        tchunkptr tmp = T->child[(K >> (SIZE_T_BITSIZE-SIZE_T_ONE)) & 1].get(); \
-        tchunkptr* C = &(tmp);\
+        malloc_tree_chunk_ptr* C = &(T->child[(K >> (SIZE_T_BITSIZE-SIZE_T_ONE)) & 1]); \
         K <<= 1;\
-        if (*C != 0)\
-          T = *C;\
+        if (C->get() != 0)\
+          T = C->get();\
         else if (RTCHECK(ok_address(M, C))) {\
           *C = X;\
           X->parent = T;\
@@ -3513,10 +3512,10 @@ static void internal_malloc_stats(mstate m)
 
 #define unlink_large_chunk(M, X) {\
   tchunkptr XP = X->parent.get();\
-  tchunkptr R;\
+  tbinptr_offset R;\
   if (X->bk.get() != X) {\
     tchunkptr F = X->fd.get();\
-    R = X->bk.get();\
+    R = X->bk;\
     if (RTCHECK(ok_address(M, F))) {\
       F->bk = R;\
       R->fd = F;\
@@ -3526,19 +3525,13 @@ static void internal_malloc_stats(mstate m)
     }\
   }\
   else {\
-    tchunkptr* RP;\
-    tchunkptr tmp0 = X->child[0].get();\
-    tchunkptr tmp1 = X->child[1].get(); \
-    if (((R = *(RP = &tmp1)) != 0) ||\
-        ((R = *(RP = &tmp0)) != 0)) {\
-      tchunkptr* CP;\
-      tmp0 = R->child[0].get();\
-      tmp1 = R->child[1].get(); \
-      while ((*(CP = &(tmp1)) != 0) ||\
-             (*(CP = &(tmp0)) != 0)) {\
+    tbinptr_offset* RP;\
+    if (((R = *(RP = &(X->child[1]))) != 0) ||\
+        ((R = *(RP = &(X->child[0]))) != 0)) {\
+      tbinptr_offset* CP;\
+      while ((*(CP = &(R->child[1])) != 0) ||\
+             (*(CP = &(R->child[0])) != 0)) {\
         R = *(RP = CP);\
-        tmp0 = R->child[0].get();\
-        tmp1 = R->child[1].get(); \
       }\
       if (RTCHECK(ok_address(M, RP)))\
         *RP = 0;\
@@ -3562,7 +3555,7 @@ static void internal_malloc_stats(mstate m)
     else\
       CORRUPTION_ERROR_ACTION(M);\
     if (R != 0) {\
-      if (RTCHECK(ok_address(M, R))) {\
+      if (RTCHECK(ok_address(M, R.get()))) {\
         tchunkptr C0, C1;\
         R->parent = XP;\
         if ((C0 = X->child[0].get()) != 0) {\
@@ -4970,11 +4963,11 @@ void* mspace_malloc(mspace msp, size_t bytes)
                 idx += ~smallbits & 1; /* Uses next bin if idx empty */
                 b = smallbin_at(ms, idx);
                 p = b->fd.get();
-                assert(chunksize(p) == small_index2size(idx));
+                chunk_size = chunksize(p);
+                assert(chunk_size == small_index2size(idx));
                 unlink_first_small_chunk(ms, b, p, idx);
                 set_inuse_and_pinuse(ms, p, small_index2size(idx));
                 mem = chunk2mem(p);
-                chunk_size = chunksize(p);
                 check_malloced_chunk(ms, mem, nb);
                 goto postaction;
             }
@@ -5042,6 +5035,7 @@ void* mspace_malloc(mspace msp, size_t bytes)
                 ms->dvsize = rsize;
                 set_size_and_pinuse_of_free_chunk(r, rsize);
                 set_size_and_pinuse_of_inuse_chunk(ms, p, nb);
+                chunk_size = nb;
             }
             else
             { /* exhaust dv */
@@ -5049,9 +5043,9 @@ void* mspace_malloc(mspace msp, size_t bytes)
                 ms->dvsize = 0;
                 ms->dv = 0;
                 set_inuse_and_pinuse(ms, p, dvs);
+                chunk_size = dvs;
             }
             mem = chunk2mem(p);
-            chunk_size = chunksize(p);
             check_malloced_chunk(ms, mem, nb);
             goto postaction;
         }
@@ -5065,7 +5059,7 @@ void* mspace_malloc(mspace msp, size_t bytes)
             r->head = rsize | PINUSE_BIT;
             set_size_and_pinuse_of_inuse_chunk(ms, p, nb);
             mem = chunk2mem(p);
-            chunk_size = chunksize(p);
+            chunk_size = nb;
             check_top_chunk(ms, ms->top);check_malloced_chunk(ms, mem, nb);
             goto postaction;
         }

@@ -35,6 +35,7 @@
 #include "zset_test.cpp"
 #include "pod_test.cpp"
 #include "performance_test.cpp"
+#include "concurrent_test.cpp"
 
 mmkv::MMKV* g_test_kv = NULL;
 
@@ -42,8 +43,9 @@ using namespace mmkv;
 static int init_mmkv()
 {
     OpenOptions open_options;
+    open_options.use_lock = true;
     open_options.create_if_notexist = true;
-    open_options.create_options.size = 1024 * 1024 * 1024;
+    open_options.create_options.size = 1024 * 1024 * 1024LL;
     return MMKV::Open(open_options, g_test_kv);
 }
 

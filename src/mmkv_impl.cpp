@@ -673,8 +673,23 @@ namespace mmkv
     }
     int MMKVImpl::FlushDB(DBID db)
     {
-        //TODO
-        return -1;
+        MMKVTable* kv = GetMMKVTable(db, false);
+        if (NULL == kv)
+        {
+            return 0;
+        }
+        MMKVTable::iterator it = kv->begin();
+        while (it != kv->end())
+        {
+            if (it.isfilled())
+            {
+                DestroyObjectContent(it.key());
+                GenericDelValue(it.value());
+            }
+            it++;
+        }
+        kv->clear();
+        return 0;
     }
     int MMKVImpl::FlushAll()
     {

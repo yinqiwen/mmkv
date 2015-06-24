@@ -28,7 +28,6 @@
  */
 
 #include "mmap.hpp"
-#include "logger.hpp"
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <fcntl.h>

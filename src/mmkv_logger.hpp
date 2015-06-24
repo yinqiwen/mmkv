@@ -27,8 +27,8 @@
  *THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef LOGGER_MACROS_HPP_
-#define LOGGER_MACROS_HPP_
+#ifndef MMKVLOGGER_MACROS_HPP_
+#define MMKVLOGGER_MACROS_HPP_
 
 #include <string>
 
@@ -47,8 +47,7 @@ namespace mmkv
 
         INVALID_LOG_LEVEL = 100
     };
-    typedef void LoggerFunc(LogLevel level, const char* filename, const char* function, int line, const char* format,
-               ...);
+    typedef void LoggerFunc(LogLevel level, const char* filename, const char* function, int line, const char* msg);
 
 }
 

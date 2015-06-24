@@ -187,11 +187,11 @@ namespace mmkv
             unsigned encoding :3;
             unsigned hasttl :1;
             unsigned len :24;
-            Object() :
+            inline Object() :
                     type(V_TYPE_STRING), encoding(OBJ_ENCODING_RAW), hasttl(0), len(0)
             {
             }
-            Object(const Object& other) :
+            inline Object(const Object& other) :
                     type(other.type), encoding(other.encoding), hasttl(other.hasttl), len(other.len)
             {
                 if (encoding == OBJ_ENCODING_OFFSET_PTR)
@@ -204,7 +204,7 @@ namespace mmkv
                     memcpy(data, other.data, 8);
                 }
             }
-            Object(const Data& v) :
+            inline Object(const Data& v) :
                     type(V_TYPE_STRING), encoding(OBJ_ENCODING_PTR), hasttl(0), len(v.len)
             {
                 if (v.data == NULL)
@@ -217,22 +217,22 @@ namespace mmkv
                     memcpy(data, &(v.data), sizeof(v.data));
                 }
             }
-            Object(const void* v, size_t length) :
+            inline Object(const void* v, size_t length) :
                     type(V_TYPE_STRING), encoding(OBJ_ENCODING_PTR), hasttl(0), len(length)
             {
                 *(void**) data = (void*) v;
             }
-            Object(const char* ss) :
+            inline Object(const char* ss) :
                     type(V_TYPE_STRING), encoding(OBJ_ENCODING_PTR), hasttl(0), len(strlen(ss))
             {
                 *(void**) data = (void*) ss;
             }
-            Object(const std::string& ss) :
+            inline Object(const std::string& ss) :
                     type(V_TYPE_STRING), encoding(OBJ_ENCODING_PTR), hasttl(0), len(ss.size())
             {
                 *(void**) data = (void*) ss.data();
             }
-            Object& operator=(const Object& other)
+            inline Object& operator=(const Object& other)
             {
                 type = other.type;
                 encoding = other.encoding;
@@ -249,12 +249,12 @@ namespace mmkv
                 }
                 return *this;
             }
-            void SetValue(const void* v)
+            inline void SetValue(const void* v)
             {
                 *(boost::interprocess::offset_ptr<void>*) data = (void*) v;
                 encoding = OBJ_ENCODING_OFFSET_PTR;
             }
-            const char* RawValue() const
+            inline const char* RawValue() const
             {
                 switch (encoding)
                 {
@@ -278,27 +278,27 @@ namespace mmkv
                     }
                 }
             }
-            char* WritableData()
+            inline char* WritableData()
             {
                 return const_cast<char*>(RawValue());
             }
-            size_t StrLen() const
+            inline size_t StrLen() const
             {
                 return len;
             }
-            bool IsInteger() const
+            inline bool IsInteger() const
             {
                 return encoding == OBJ_ENCODING_INT;
             }
-            bool IsPtr() const
+            inline bool IsPtr() const
             {
                 return encoding == OBJ_ENCODING_PTR || encoding == OBJ_ENCODING_OFFSET_PTR;
             }
-            bool IsOffsetPtr() const
+            inline bool IsOffsetPtr() const
             {
                 return encoding == OBJ_ENCODING_OFFSET_PTR;
             }
-            int64_t IntegerValue() const
+            inline int64_t IntegerValue() const
             {
                 if (IsInteger())
                 {
@@ -309,7 +309,7 @@ namespace mmkv
                     return 0;
                 }
             }
-            bool SetInteger(int64_t v)
+            inline bool SetInteger(int64_t v)
             {
                 len = digits10(std::abs(v));
                 if (v < 0)
@@ -319,7 +319,7 @@ namespace mmkv
                 return true;
             }
 
-            bool ToString(std::string& str) const
+            inline bool ToString(std::string& str) const
             {
                 if (type != V_TYPE_STRING)
                 {
@@ -346,12 +346,9 @@ namespace mmkv
                     }
                 }
             }
-            int Compare(const Object& right) const
+            inline int Compare(const Object& right) const
             {
-                if (type != V_TYPE_STRING || right.type != V_TYPE_STRING)
-                {
-                    abort();
-                }
+                assert(type == V_TYPE_STRING && right.type == V_TYPE_STRING);
                 if (IsInteger() && right.IsInteger())
                 {
                     return IntegerValue() - right.IntegerValue();
@@ -380,25 +377,13 @@ namespace mmkv
                 {
                     return 1;
                 }
-
-                if (len == min_len && right.len == min_len)
-                {
-                    return 0;
-                }
-                else if (right.len > min_len)
-                {
-                    return -1;
-                }
-                else
-                {
-                    return 1;
-                }
+                return len - right.len;
             }
-            bool operator ==(const Object& s1) const
+            inline bool operator ==(const Object& s1) const
             {
                 return Compare(s1) == 0;
             }
-            bool operator <(const Object& s1) const
+            inline bool operator <(const Object& s1) const
             {
                 return Compare(s1) < 0;
             }
@@ -524,8 +509,6 @@ namespace mmkv
             {
             }
     };
-
-
 
 }
 

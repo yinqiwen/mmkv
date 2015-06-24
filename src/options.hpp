@@ -30,7 +30,7 @@
 #ifndef OPTIONS_HPP_
 #define OPTIONS_HPP_
 
-#include "logger.hpp"
+#include "mmkv_logger.hpp"
 namespace mmkv
 {
     struct CreateOptions

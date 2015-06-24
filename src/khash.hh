@@ -848,6 +848,7 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
                 alloc.deallocate_ptr((char*) new_flags);
                 return false;
             }
+            valtype_t* vals_ptr = vals.get();
 //        for(int k = 0; k < this->n_capacity; k++)
 //        {
 //            printf("###after rezie val[%d] = %p\n", k, vals[k].get());
@@ -859,7 +860,7 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
                 if (__ac_isboth(this->flags, j) == 0)
                 {
                     keytype_t key = this->keys[j]; // take out the key
-                    valtype_t val = vals[j];
+                    valtype_t val = vals_ptr[j];
                     __ac_set_isdel_true(this->flags, j); // mark "deleted"
                     while (1)
                     {
@@ -883,8 +884,8 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
                                 key = tmp;
                             } // take it out
                             {
-                                valtype_t tmp = vals[i];
-                                vals[i] = val;
+                                valtype_t tmp = vals_ptr[i];
+                                vals_ptr[i] = val;
                                 val = tmp;
                             } // take it out
                             __ac_set_isdel_true(this->flags, i);
@@ -892,7 +893,7 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
                         else
                         { // clear
                             this->keys[i] = key;
-                            vals[i] = val;
+                            vals_ptr[i] = val;
                             break;
                         }
                     }
@@ -907,11 +908,13 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
         }
         inline iterator find(const keytype_t &key)
         {
-            khashint_t i = __ac_hash_search_aux(key, this->n_capacity, this->keys.get(), this->flags.get(), hashf_t(),
+            __ac_flag_t* flags_ptr = this->flags.get();
+            keytype_t* keys_ptr = this->keys.get();
+            khashint_t i = __ac_hash_search_aux(key, this->n_capacity, keys_ptr, flags_ptr, hashf_t(),
                     hasheq_t());
-            if (i != this->n_capacity && __ac_isboth(this->flags.get(), i) == 0)
+            if (i != this->n_capacity && __ac_isboth(flags_ptr, i) == 0)
             {
-                return iterator(i, this->keys.get(), this->flags.get(), vals.get());
+                return iterator(i, keys_ptr, flags_ptr, vals.get());
             }
             else
                 return this->end();
@@ -920,11 +923,14 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
         inline inspair_t insert(const keytype_t &key, const valtype_t &val)
         {
             rehash();
+            __ac_flag_t* flags_ptr = this->flags.get();
+            keytype_t* keys_ptr = this->keys.get();
             khashint_t i;
-            int ret = this->direct_insert_aux(key, this->n_capacity, this->keys.get(), this->flags.get(), &i);
+            int ret = this->direct_insert_aux(key, this->n_capacity, keys_ptr, flags_ptr, &i);
             if (ret == 0)
-                return inspair_t(iterator(i, this->keys.get(), this->flags.get(), vals.get()), false);
-            vals[i] = val;
+                return inspair_t(iterator(i, keys_ptr, flags_ptr, vals.get()), false);
+            valtype_t* vals_ptr = vals.get();
+            vals_ptr[i] = val;
             if (ret == 1)
             {
                 ++(this->n_size);
@@ -932,7 +938,7 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
             }
             else
                 ++(this->n_size); // then ret == 2
-            return inspair_t(iterator(i, this->keys.get(), this->flags.get(), vals.get()), true);
+            return inspair_t(iterator(i, keys_ptr, flags_ptr, vals_ptr), true);
         }
         inline inspair_t insert(const value_type& val)
         {

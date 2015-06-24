@@ -39,7 +39,25 @@ namespace mmkv
     static const char* kLogLevelNames[] =
         { "FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE" };
     static void default_loghandler(LogLevel level, const char* filename, const char* function, int line,
-            const char* format, ...)
+            const char* msg)
+    {
+        uint64_t timestamp = get_current_micros();
+        uint32_t mills = (timestamp / 1000) % 1000;
+        char timetag[256];
+        struct tm tm;
+        time_t now = timestamp / 1000000;
+        localtime_r(&now, &tm);
+        sprintf(timetag, "%02u-%02u %02u:%02u:%02u", tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+        fprintf(stdout, "%s %s:%d %s\n", timetag, filename, line, msg);
+        fflush(stdout);
+    }
+    Logger::Logger() :
+            loglevel(INFO_LOG_LEVEL), logfunc(default_loghandler)
+    {
+    }
+
+    void Logger::operator()(LogLevel level, const char* filename, const char* function, int line, const char* format,
+            ...)
     {
         const char* levelstr = 0;
 
@@ -59,20 +77,7 @@ namespace mmkv
         va_end(args);
         content[sz] = 0;
 
-        uint64_t timestamp = get_current_micros();
-        uint32_t mills = (timestamp / 1000) % 1000;
-        char timetag[256];
-        struct tm tm;
-        time_t now = timestamp / 1000000;
-        localtime_r(&now, &tm);
-        sprintf(timetag, "%02u-%02u %02u:%02u:%02u", tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
-        fprintf(stdout, "[%u] %s,%03u %s %s\n", getpid(), timetag, mills, levelstr, content);
-        fflush(stdout);
-
-    }
-    Logger::Logger() :
-            loglevel(INFO_LOG_LEVEL), logfunc(default_loghandler)
-    {
+        (*logfunc)(level, filename, function, line, content);
     }
 }
 

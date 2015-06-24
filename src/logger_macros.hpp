@@ -29,7 +29,7 @@
 
 #ifndef SRC_LOGGER_MACROS_HPP_
 #define SRC_LOGGER_MACROS_HPP_
-#include "logger.hpp"
+#include "mmkv_logger.hpp"
 
 namespace mmkv{
     struct Logger
@@ -39,8 +39,10 @@ namespace mmkv{
             Logger();
             inline bool IsLogEnable(LogLevel level)
             {
-                return level <= loglevel;
+                return logfunc != NULL && level <= loglevel;
             }
+            void operator()(LogLevel level, const char* filename, const char* function, int line, const char* format,
+                                ...);
     };
 }
 
@@ -55,49 +57,49 @@ namespace mmkv{
 #define DEBUG_LOG(...) do {\
    if(DEBUG_ENABLED())\
    {                 \
-       (*m_logger.logfunc)(mmkv::DEBUG_LOG_LEVEL, __FILE__, __FUNCTION__, __LINE__,__VA_ARGS__); \
+       m_logger(mmkv::DEBUG_LOG_LEVEL, __FILE__, __FUNCTION__, __LINE__,__VA_ARGS__); \
    }\
 }while(0)
 
 #define WARN_LOG(...) do {\
     if(WARN_ENABLED())\
     {                 \
-        (*m_logger.logfunc)(mmkv::WARN_LOG_LEVEL, __FILE__, __FUNCTION__, __LINE__,__VA_ARGS__); \
+        m_logger(mmkv::WARN_LOG_LEVEL, __FILE__, __FUNCTION__, __LINE__,__VA_ARGS__); \
     }\
 }while(0)
 
 #define TRACE_LOG(...) do {\
     if(TRACE_ENABLED())\
     {                 \
-        (*m_logger.logfunc)(mmkv::TRACE_LOG_LEVEL, __FILE__, __FUNCTION__, __LINE__,__VA_ARGS__); \
+        m_logger(mmkv::TRACE_LOG_LEVEL, __FILE__, __FUNCTION__, __LINE__,__VA_ARGS__); \
     }\
 }while(0)
 
 #define ERROR_LOG(...) do {\
     if(ERROR_ENABLED())\
     {                 \
-        (*m_logger.logfunc)(mmkv::ERROR_LOG_LEVEL, __FILE__, __FUNCTION__, __LINE__,__VA_ARGS__); \
+        m_logger(mmkv::ERROR_LOG_LEVEL, __FILE__, __FUNCTION__, __LINE__,__VA_ARGS__); \
     }\
 }while(0)
 
 #define FATAL_LOG(...) do {\
     if(FATAL_ENABLED())\
     {                 \
-        (*m_logger.logfunc)(mmkv::FATAL_LOG_LEVEL, __FILE__, __FUNCTION__, __LINE__,__VA_ARGS__); \
+        m_logger(mmkv::FATAL_LOG_LEVEL, __FILE__, __FUNCTION__, __LINE__,__VA_ARGS__); \
     }\
 }while(0)
 
 #define INFO_LOG(...)do {\
         if(INFO_ENABLED())\
         {                 \
-            (*m_logger.logfunc)(mmkv::INFO_LOG_LEVEL, __FILE__, __FUNCTION__, __LINE__,__VA_ARGS__); \
+            m_logger(mmkv::INFO_LOG_LEVEL, __FILE__, __FUNCTION__, __LINE__,__VA_ARGS__); \
         }\
     }while(0)
 
 #define LOG_WITH_LEVEL(level, ...) do {\
    if(LOG_ENABLED(level))\
    {                 \
-       (*m_logger.logfunc)(level, __FILE__, __FUNCTION__, __LINE__,__VA_ARGS__); \
+       m_logger(level, __FILE__, __FUNCTION__, __LINE__,__VA_ARGS__); \
    }\
 }while(0)
 

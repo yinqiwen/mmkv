@@ -39,7 +39,7 @@
 #include <limits.h>
 #include <string.h>
 #include <stdio.h>
-#include "logger.hpp"
+#include "mmkv_logger.hpp"
 
 namespace mmkv
 {

@@ -30,7 +30,7 @@
 #include "lock_guard.hpp"
 #include "locks.hpp"
 #include "malloc-2.8.3.h"
-#include "logger.hpp"
+#include "mmkv_logger.hpp"
 #include "thread_local.hpp"
 #include <stdio.h>
 #include <sys/types.h>

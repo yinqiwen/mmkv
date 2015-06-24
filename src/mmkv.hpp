@@ -37,7 +37,7 @@
 #include <vector>
 #include <utility>
 #include "options.hpp"
-#include "logger.hpp"
+#include "mmkv_logger.hpp"
 #include "allocator.hpp"
 
 namespace mmkv

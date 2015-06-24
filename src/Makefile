@@ -69,7 +69,7 @@ LIBS= ../deps/lz4/liblz4.a -lpthread
 	${CC} -c ${CCFLAGS} ${INCS} $< -o $@
 
 
-COMMON_OBJECTS := logger.o mmkv.o mmkv_impl.o malloc.o memory.o mmap.o locks.o t_string.o t_list.o t_hash.o t_zset.o t_set.o bitops.o utils.o \
+COMMON_OBJECTS := mmkv.o mmkv_logger.o mmkv_impl.o malloc.o memory.o mmap.o locks.o t_string.o t_list.o t_hash.o t_zset.o t_set.o bitops.o utils.o \
                   hyperloglog.o
 
 TESTOBJ := ../test/ut.o ../test/test_main.o

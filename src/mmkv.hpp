@@ -520,6 +520,9 @@ namespace mmkv
                 if (readonly)
                 {
                     created_if_notexist = false;
+                }else
+                {
+                    RegisterPODDestructor<T>(expected_type);
                 }
                 int ret = GetPOD(db, key, created_if_notexist, expected_type, v);
                 if (ret < 0)

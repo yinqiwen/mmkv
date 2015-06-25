@@ -418,7 +418,6 @@ class __ac_hash_val_iterator: public __ac_hash_base_iterator<keytype_t>
         typedef std::pair<keytype_t, valtype_t> kvpair_t;
     protected:
         valtype_t *vals;
-        kvpair_t kvpair;
     public:
         __ac_hash_val_iterator()
         {
@@ -822,7 +821,7 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
                 }
                 for (khashint_t k = this->n_capacity; k < new_capacity; k++)
                 {
-                    ::new ((void*) (new_val + k)) valtype_t;
+                    //::new ((void*) (new_val + k)) valtype_t;
                 }
             }
             alloc.deallocate_ptr((char*) vals.get());
@@ -930,7 +929,7 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
             if (ret == 0)
                 return inspair_t(iterator(i, keys_ptr, flags_ptr, vals.get()), false);
             valtype_t* vals_ptr = vals.get();
-            vals_ptr[i] = val;
+            vals_ptr[i] = const_cast<valtype_t&>(val);
             if (ret == 1)
             {
                 ++(this->n_size);

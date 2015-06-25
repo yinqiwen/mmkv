@@ -214,7 +214,6 @@ namespace mmkv
                 else
                 {
                     *(void**) data = (void*) v.data;
-                    memcpy(data, &(v.data), sizeof(v.data));
                 }
             }
             inline Object(const void* v, size_t length) :

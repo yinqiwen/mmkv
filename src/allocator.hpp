@@ -184,7 +184,8 @@ namespace mmkv
 
             inline void deallocate_ptr(const T* ptr, size_type n = 1)
             {
-                if(NULL == ptr) return;
+                if (NULL == ptr)
+                    return;
                 //mp_mngr->deallocate((void*) ipcdetail::to_raw_pointer(ptr));
                 //mspace_free(m_first_space.buf, ptr);
                 T* p = (T*) ptr;
@@ -202,11 +203,15 @@ namespace mmkv
                 deallocate_ptr(ptr.get(), n);
             }
 
-            template <typename R>
+            template<typename R>
             void destroy(R* p)
             {
+                if (NULL == p)
+                {
+                    return;
+                }
                 p->~R();
-                deallocate_ptr((T*)p);
+                deallocate_ptr((T*) p);
             }
 
             //!Returns the number of elements that could be allocated.

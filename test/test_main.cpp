@@ -45,7 +45,7 @@ static int init_mmkv()
     OpenOptions open_options;
     open_options.use_lock = true;
     open_options.create_if_notexist = true;
-    open_options.create_options.size = 1024 * 1024 * 1024LL;
+    open_options.create_options.size = 10 * 1024 * 1024 * 1024LL;
     return MMKV::Open(open_options, g_test_kv);
 }
 

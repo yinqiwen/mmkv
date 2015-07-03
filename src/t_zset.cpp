@@ -1196,7 +1196,7 @@ namespace mmkv
         }
     }
 
-    int MMKVImpl::GenericZSetInterfUnion(DBID db, int op, const Data& destination, const DataArray& keys,
+    int MMKVImpl::GenericZSetInterUnion(DBID db, int op, const Data& destination, const DataArray& keys,
             const WeightArray& weights, const std::string& aggregate)
     {
         if (!weights.empty() && weights.size() != keys.size())
@@ -1398,7 +1398,7 @@ namespace mmkv
         {
             return ERR_PERMISSION_DENIED;
         }
-        return GenericZSetInterfUnion(db, OP_INTER, destination, keys, weights, aggregate);
+        return GenericZSetInterUnion(db, OP_INTER, destination, keys, weights, aggregate);
     }
     int MMKVImpl::ZUnionStore(DBID db, const Data& destination, const DataArray& keys, const WeightArray& weights,
             const std::string& aggregate)
@@ -1407,7 +1407,7 @@ namespace mmkv
         {
             return ERR_PERMISSION_DENIED;
         }
-        return GenericZSetInterfUnion(db, OP_UNION, destination, keys, weights, aggregate);
+        return GenericZSetInterUnion(db, OP_UNION, destination, keys, weights, aggregate);
     }
 }
 

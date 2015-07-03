@@ -98,9 +98,9 @@ namespace mmkv
 
             int GenericSInterDiffUnion(DBID db, int op, const DataArray& keys, const Data* dest, StringArray* results);
 
-            int GenericZSetInterfUnion(DBID db, int op,const Data& destination, const DataArray& keys, const WeightArray& weights,
+            int GenericZSetInterUnion(DBID db, int op,const Data& destination, const DataArray& keys, const WeightArray& weights,
                     const std::string& aggregate);
-
+            int ReOpen();
         public:
             MMKVImpl();
             MemorySegmentManager& GetMemoryManager()
@@ -343,7 +343,6 @@ namespace mmkv
 
             int RemoveExpiredKeys(uint32_t max_removed , uint32_t max_time);
 
-            int SyncData();
 
             ~MMKVImpl();
     };

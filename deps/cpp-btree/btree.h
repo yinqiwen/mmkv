@@ -97,8 +97,8 @@
 // BM_map_string_fifo          398      596  -49.75%  <256>    [72.0, 44.0]
 // BM_map_string_fwditer       243      113  +53.50%  <256>    [72.0, 55.8]
 
-#ifndef UTIL_BTREE_BTREE_H__
-#define UTIL_BTREE_BTREE_H__
+#ifndef MMKV_UTIL_BTREE_BTREE_H__
+#define MMKV_UTIL_BTREE_BTREE_H__
 
 #include "btree_config.h"
 #include <assert.h>
@@ -703,7 +703,7 @@ class btree_node {
     f->count = 0;
     f->parent = parent;
     if (!NDEBUG) {
-      memset(&f->values, 0, max_count * sizeof(value_type));
+      //memset(&f->values, 0, max_count * sizeof(value_type));
     }
     return n;
   }
@@ -711,7 +711,11 @@ class btree_node {
     btree_node *n = init_leaf(f, parent, kNodeValues);
     f->leaf = 0;
     if (!NDEBUG) {
-      memset(f->children, 0, sizeof(f->children));
+      //memset(f->children, 0, sizeof(f->children));
+        for(size_t i = 0; i < sizeof(f->children); i++)
+        {
+            f->children[i] = 0;
+        }
     }
     return n;
   }
@@ -1311,6 +1315,10 @@ class btree : public Params::key_compare {
 
   // Tries to shrink the height of the tree by 1.
   void try_shrink();
+
+  void* get_root(){
+      return root();
+  }
 
   iterator internal_end(iterator iter) {
     return iter.node ? iter : end();

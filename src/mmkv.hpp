@@ -522,7 +522,7 @@ namespace mmkv
                     created_if_notexist = false;
                 }else
                 {
-                    RegisterPODDestructor<T>(expected_type);
+                    RegisterPODType<T>(expected_type);
                 }
                 int ret = GetPOD(db, key, created_if_notexist, expected_type, v);
                 if (ret < 0)
@@ -557,8 +557,6 @@ namespace mmkv
             virtual void Unlock(bool readonly) = 0;
 
             virtual int RemoveExpiredKeys(uint32_t max_removed = 10000, uint32_t max_time = 100) = 0;
-
-            virtual int SyncData() = 0;
 
             virtual ~MMKV()
             {

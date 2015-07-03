@@ -45,13 +45,6 @@ namespace mmkv
             char named_objects[sizeof(StringObjectTable)];
     };
 
-    struct Meta
-    {
-            int64_t size;
-            int64_t init_key_space_size;
-            int64_t init_value_space_size;
-    };
-
     struct MMLock;
     class MMKV;
     class MemorySegmentManager
@@ -60,10 +53,12 @@ namespace mmkv
             bool m_readonly;
             bool m_lock_enable;
             Logger m_logger;
-            MemorySpace m_key_space;
-            MemorySpace m_value_space;
+            Allocator<char> m_key_allocator;
+            Allocator<char> m_value_allocator;
             StringObjectTable* m_named_objs;
             MMLock* m_global_lock;
+            void* m_data_buf;
+            OpenOptions m_open_options;
             friend class MMKV;
             StringObjectTable& GetNamedObjects()
             {
@@ -72,6 +67,7 @@ namespace mmkv
         public:
             MemorySegmentManager();
             void SetLogger(const Logger& logger);
+            int ReCreate(bool overwrite);
             int Open(const OpenOptions& open_options);
 
             bool AssignObjectValue(Object& obj, const Data& value, bool in_keyspace = false, bool try_int_encoding =
@@ -147,9 +143,6 @@ namespace mmkv
             bool Unlock(LockMode mode);
             bool IsLocked(bool readonly);
             bool LockEnable();
-
-            int SyncKeySpace();
-            int SyncValueSpace();
 
             bool Verify();
 

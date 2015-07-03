@@ -39,7 +39,7 @@ namespace mmkv
     static const char* kLogLevelNames[] =
         { "FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE" };
     static void default_loghandler(LogLevel level, const char* filename, const char* function, int line,
-            const char* msg)
+            const char* msg, int msg_len)
     {
         uint64_t timestamp = get_current_micros();
         uint32_t mills = (timestamp / 1000) % 1000;
@@ -77,7 +77,7 @@ namespace mmkv
         va_end(args);
         content[sz] = 0;
 
-        (*logfunc)(level, filename, function, line, content);
+        (*logfunc)(level, filename, function, line, content, sz);
     }
 }
 

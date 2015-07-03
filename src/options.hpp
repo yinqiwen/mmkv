@@ -55,8 +55,9 @@ namespace mmkv
             LoggerFunc* log_func;
             CreateOptions create_options;
             OpenOptions() :
-                    dir("./mmkv"), readonly(false), verify(true), reserve_keyspace(false), reserve_valuespace(false), use_lock(false), create_if_notexist(
-                            false), log_level(INFO_LOG_LEVEL), log_func(NULL)
+                    dir("./mmkv"), readonly(false), verify(true), reserve_keyspace(false), reserve_valuespace(
+                            false), use_lock(false), create_if_notexist(false), log_level(INFO_LOG_LEVEL), log_func(
+                            NULL)
             {
             }
     };

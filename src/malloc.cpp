@@ -1121,7 +1121,7 @@ extern "C"
      Destroying this space will deallocate all additionally allocated
      space (if possible) but not the initial base.
      */
-    mspace create_mspace_with_base(void* base, size_t capacity, int locked);
+    mspace create_mspace_with_base(void* base, size_t capacity, int locked, int recreate);
 
     /*
      mspace_malloc behaves as malloc, but operates within
@@ -4878,13 +4878,13 @@ mspace create_mspace(size_t capacity, int locked)
     return (mspace) m;
 }
 
-mspace create_mspace_with_base(void* base, size_t capacity, int locked)
+mspace create_mspace_with_base(void* base, size_t capacity, int locked, int recreate)
 {
     mstate m = 0;
     int first_init = 1;
     pmparams = (struct malloc_params*) base; //?should allign here
     size_t msize = pad_request(sizeof(struct malloc_state));
-    if (pmparams->magic != 0)
+    if (pmparams->magic != 0 && recreate == 0)
     {
         first_init = 0;
     }

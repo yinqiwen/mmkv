@@ -133,20 +133,9 @@ namespace mmkv
         return &(found.value());
     }
 
-    int MMKVImpl::Open(const OpenOptions& open_options)
+    int MMKVImpl::ReOpen()
     {
-        m_readonly = open_options.readonly;
-        m_logger.loglevel = open_options.log_level;
-        if (NULL != open_options.log_func)
-        {
-            m_logger.logfunc = open_options.log_func;
-        }
-        m_segment.SetLogger(m_logger);
-        if (0 != m_segment.Open(open_options))
-        {
-            return -1;
-        }
-        if (!open_options.readonly)
+        if (!m_readonly)
         {
             TTLValueAllocator allocator(m_segment.GetKeySpaceAllocator());
             RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
@@ -161,6 +150,23 @@ namespace mmkv
                 m_ttlmap->set_deleted_key(empty);
             }
         }
+        return 0;
+    }
+
+    int MMKVImpl::Open(const OpenOptions& open_options)
+    {
+        m_readonly = open_options.readonly;
+        m_logger.loglevel = open_options.log_level;
+        if (NULL != open_options.log_func)
+        {
+            m_logger.logfunc = open_options.log_func;
+        }
+        m_segment.SetLogger(m_logger);
+        if (0 != m_segment.Open(open_options))
+        {
+            return -1;
+        }
+        ReOpen();
         if (open_options.verify)
         {
             //m_kv->verify();
@@ -693,8 +699,10 @@ namespace mmkv
     }
     int MMKVImpl::FlushAll()
     {
-        //TODO
-        return -1;
+        m_kvs.clear();
+        m_segment.ReCreate(true);
+        ReOpen();
+        return 0;
     }
 
     int MMKVImpl::RemoveExpiredKeys(uint32_t max_removed, uint32_t max_time)
@@ -736,13 +744,6 @@ namespace mmkv
             removed++;
         }
         return removed;
-    }
-
-    int MMKVImpl::SyncData()
-    {
-        m_segment.SyncKeySpace();
-        m_segment.SyncValueSpace();
-        return 0;
     }
 
     MMKVImpl::~MMKVImpl()

@@ -40,39 +40,28 @@
 
 namespace mmkv
 {
-    struct MemorySpace
+    struct Meta
     {
-            void* buf;
             size_t size;
-            MemorySpace() :
-                    buf(NULL), size(0)
+            size_t init_key_space_size;
+            size_t keyspace_offset;
+            size_t valuespace_offset;
+            Meta() :
+                    size(0), init_key_space_size(0), keyspace_offset(0), valuespace_offset(0)
             {
+            }
+            inline bool IsKeyValueSplit()
+            {
+                return keyspace_offset != init_key_space_size;
             }
     };
-    struct MemorySpaceOffset
+    struct MemorySpaceInfo
     {
-            boost::interprocess::offset_ptr<void> buf;
-            size_t size;
-            MemorySpaceOffset() :
-                    size(0)
+            boost::interprocess::offset_ptr<void> space;
+            bool is_keyspace;
+            MemorySpaceInfo() :
+                    is_keyspace(false)
             {
-            }
-            MemorySpaceOffset(const MemorySpace& space) :
-                    buf(space.buf), size(space.size)
-            {
-            }
-            MemorySpaceOffset(const MemorySpaceOffset& space) :
-                    buf(space.buf), size(space.size)
-            {
-            }
-            bool InSpace(const void* p)
-            {
-                const void* max_addr = (const char*) buf.get() + size;
-                return p > buf.get() && p < max_addr;
-            }
-            bool InSpace(const boost::interprocess::offset_ptr<void>& ptr)
-            {
-                return InSpace(ptr.get());
             }
     };
 
@@ -92,8 +81,7 @@ namespace mmkv
             //Not assignable from other allocator
 
             //Pointer to the allocator
-            MemorySpaceOffset m_primary_space;
-            MemorySpaceOffset m_secondary_space;
+            MemorySpaceInfo m_space;
 
         public:
             typedef T value_type;
@@ -115,18 +103,20 @@ namespace mmkv
             {
                     typedef Allocator<T2> other;
             };
-
+            Allocator()
+            {
+            }
             //!Constructor from the segment manager.
             //!Never throws
-            Allocator(MemorySpace space1, MemorySpace space2) :
-                    m_primary_space(space1), m_secondary_space(space2)
+            Allocator(const MemorySpaceInfo& space) :
+                    m_space(space)
             {
             }
 
             //!Constructor from other allocator.
             //!Never throws
             Allocator(const Allocator &other) :
-                    m_primary_space(other.m_primary_space), m_secondary_space(other.m_secondary_space)
+                    m_space(other.m_space)
             {
             }
 
@@ -134,13 +124,12 @@ namespace mmkv
             //!Never throws
             template<class T2>
             Allocator(const Allocator<T2> &other) :
-                    m_primary_space(other.get_primary_space()), m_secondary_space(other.get_secondary_space())
+                    m_space(other.get_space())
             {
             }
             Allocator& operator=(const Allocator& other)
             {
-                m_primary_space = other.get_primary_space();
-                m_secondary_space = other.get_secondary_space();
+                m_space = other.get_space();
                 return *this;
             }
 
@@ -149,12 +138,29 @@ namespace mmkv
             T* allocate(size_type count, const_pointer hint = 0)
             {
                 (void) hint;
-                void* p = mspace_malloc(m_primary_space.buf.get(), count * sizeof(T));
-                if (NULL == p)
+                void* p = NULL;
+                Meta* meta = (Meta*) (m_space.space.get());
+                if (m_space.is_keyspace || !meta->IsKeyValueSplit())
                 {
-                    p = mspace_malloc(m_secondary_space.buf.get(), count * sizeof(T));
+                    p = mspace_malloc((char*) (meta) + meta->keyspace_offset, count * sizeof(T));
                 }
-                if (p == NULL)
+                else
+                {
+                    p = mspace_malloc((char*) (meta) + meta->valuespace_offset, count * sizeof(T));
+                }
+                //allocate from other space
+                if (NULL == p && meta->IsKeyValueSplit())
+                {
+                    if (m_space.is_keyspace)
+                    {
+                        p = mspace_malloc((char*) (meta) + meta->valuespace_offset, count * sizeof(T));
+                    }
+                    else
+                    {
+                        p = mspace_malloc((char*) (meta) + meta->keyspace_offset, count * sizeof(T));
+                    }
+                }
+                if (NULL == p)
                 {
                     throw std::bad_alloc();
                 }
@@ -164,13 +170,23 @@ namespace mmkv
             void* realloc(void* oldmem, size_t bytes)
             {
                 void* p = NULL;
-                if (NULL == oldmem || m_primary_space.InSpace(oldmem))
+                Meta* meta = (Meta*) (m_space.space.get());
+                if (!meta->IsKeyValueSplit())
                 {
-                    p = mspace_realloc(m_primary_space.buf.get(), oldmem, bytes);
+                    p = mspace_realloc((char*) (meta) + meta->keyspace_offset, oldmem, bytes);
                 }
                 else
                 {
-                    p = mspace_realloc(m_secondary_space.buf.get(), oldmem, bytes);
+                    char* valuespace = (char*) (meta) + meta->valuespace_offset;
+                    if ((char*) p >= valuespace)
+                    {
+                        p = mspace_realloc(valuespace, oldmem, bytes);
+                    }
+                    else
+                    {
+                        p = mspace_realloc((char*) (meta) + meta->keyspace_offset, oldmem, bytes);
+                    }
+
                 }
                 if (NULL == p)
                 {
@@ -186,16 +202,23 @@ namespace mmkv
             {
                 if (NULL == ptr)
                     return;
-                //mp_mngr->deallocate((void*) ipcdetail::to_raw_pointer(ptr));
-                //mspace_free(m_first_space.buf, ptr);
+                Meta* meta = (Meta*) (m_space.space.get());
                 T* p = (T*) ptr;
-                if (m_primary_space.InSpace(p))
+                if (!meta->IsKeyValueSplit())
                 {
-                    mspace_free(m_primary_space.buf.get(), p);
+                    mspace_free((char*) (meta) + meta->keyspace_offset, p);
                 }
                 else
                 {
-                    mspace_free(m_secondary_space.buf.get(), p);
+                    char* valuespace = (char*) (meta) + meta->valuespace_offset;
+                    if ((char*) p >= valuespace)
+                    {
+                        mspace_free(valuespace, p);
+                    }
+                    else
+                    {
+                        mspace_free((char*) (meta) + meta->keyspace_offset, p);
+                    }
                 }
             }
             inline void deallocate(const pointer &ptr, size_type n = 1)
@@ -218,8 +241,22 @@ namespace mmkv
             //!Never throws
             size_type max_size() const
             {
-                return m_primary_space.size / sizeof(T);
-                //return mspace_max_footprint(m_first_space) / sizeof(T);
+                Meta* meta = (Meta*) (m_space.space.get());
+                if (!meta->IsKeyValueSplit())
+                {
+                    return meta->size / sizeof(T);
+                }
+                else
+                {
+                    if (m_space.is_keyspace)
+                    {
+                        return meta->init_key_space_size / sizeof(T);
+                    }
+                    else
+                    {
+                        return (meta->size - meta->init_key_space_size) / sizeof(T);
+                    }
+                }
             }
 
             //!Swap segment manager. Does not throw. If each allocator is placed in
@@ -269,13 +306,22 @@ namespace mmkv
                 (*p).~value_type();
             }
 
-            MemorySpaceOffset get_primary_space() const
+            MemorySpaceInfo get_space() const
             {
-                return m_primary_space;
+                return m_space;
             }
-            MemorySpaceOffset get_secondary_space() const
+
+            void* get_mspace()
             {
-                return m_secondary_space;
+                Meta* meta = (Meta*) (m_space.space.get());
+                if (m_space.is_keyspace || !meta->IsKeyValueSplit())
+                {
+                    return (char*) (meta) + meta->keyspace_offset;
+                }
+                else
+                {
+                    return (char*) (meta) + meta->valuespace_offset;
+                }
             }
     };
 
@@ -284,8 +330,7 @@ namespace mmkv
     template<class T> inline
     bool operator==(const Allocator<T> &alloc1, const Allocator<T> &alloc2)
     {
-        return alloc1.get_primary_space().buf == alloc2.get_primary_space().buf
-                && alloc1.get_secondary_space().buf == alloc2.get_secondary_space().buf;
+        return alloc1.get_space().space == alloc2.get_space().space;
     }
 
     //!Inequality test for same type
@@ -293,14 +338,12 @@ namespace mmkv
     template<class T> inline
     bool operator!=(const Allocator<T> &alloc1, const Allocator<T> &alloc2)
     {
-        return alloc1.get_primary_space().buf != alloc2.get_primary_space().buf
-                || alloc1.get_secondary_space().buf != alloc2.get_secondary_space().buf;
+        return alloc1.get_space().space != alloc2.get_space().space;
     }
     template<class T1, class T2> inline
     bool operator!=(const Allocator<T1> &alloc1, const Allocator<T2> &alloc2)
     {
-        return alloc1.get_primary_space().buf != alloc2.get_primary_space().buf
-                || alloc1.get_secondary_space().buf != alloc2.get_secondary_space().buf;
+        return alloc1.get_space().space != alloc2.get_space().space;
     }
 }
 

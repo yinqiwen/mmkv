@@ -47,7 +47,7 @@ namespace mmkv
 
         INVALID_LOG_LEVEL = 100
     };
-    typedef void LoggerFunc(LogLevel level, const char* filename, const char* function, int line, const char* msg);
+    typedef void LoggerFunc(LogLevel level, const char* filename, const char* function, int line, const char* msg, int msg_len);
 
 }
 

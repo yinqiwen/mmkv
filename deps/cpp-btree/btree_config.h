@@ -4,8 +4,8 @@
 // Author: CHEN Feng <chen3feng@gmail.com>
 // Created: 2013-04-08
 
-#ifndef CPP_BTREE_CONFIG_H
-#define CPP_BTREE_CONFIG_H
+#ifndef MMKV_CPP_BTREE_CONFIG_H
+#define MMKV_CPP_BTREE_CONFIG_H
 #pragma once
 
 #if defined(__GXX_EXPERIMENTAL_CXX0X__) || (__cplusplus >= 201103L) || \

@@ -120,7 +120,7 @@ TEST(Containers, POD)
         CHECK_EQ(int, pod->ids[1], 200, "");
         CHECK_EQ(int, pod->ids[2], 300, "");
     }
-    CHECK_EQ(int, g_test_kv->RegisterPODType<TestPODContainer>(2), 0, "");
+    //CHECK_EQ(int, g_test_kv->RegisterPODType<TestPODContainer>(2), 0, "");
     CHECK_EQ(int, g_test_kv->Del(0, "mypod"), 1, "");
     {
         mmkv::LockedPOD<TestPODContainer> pod;

@@ -435,7 +435,7 @@ size_t destroy_mspace(mspace msp);
   Destroying this space will deallocate all additionally allocated
   space (if possible) but not the initial base.
 */
-mspace create_mspace_with_base(void* base, size_t capacity, int locked);
+mspace create_mspace_with_base(void* base, size_t capacity, int locked, int recreate);
 
 /*
   mspace_malloc behaves as malloc, but operates within

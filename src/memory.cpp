@@ -48,8 +48,8 @@
 
 namespace mmkv
 {
-    static const int kMetaLength = 4096;
     static const int kHeaderLength = 1024 * 1024;
+    static const int kMetaLength = 4096;
     static const int kLocksFileLength = 4096;
     static pid_t g_current_pid = 0;
     static ThreadLocal<uint32_t> g_lock_state;
@@ -90,7 +90,7 @@ namespace mmkv
     };
 
     MemorySegmentManager::MemorySegmentManager() :
-            m_readonly(false), m_lock_enable(false), m_named_objs(NULL), m_global_lock(NULL)
+            m_readonly(false), m_lock_enable(false), m_named_objs(NULL), m_global_lock(NULL), m_data_buf(NULL)
     {
 
     }
@@ -101,9 +101,9 @@ namespace mmkv
 
     int MemorySegmentManager::Open(const OpenOptions& open_options)
     {
-        if(!is_dir_exist(open_options.dir))
+        if (!is_dir_exist(open_options.dir))
         {
-            if(!open_options.create_if_notexist  || open_options.readonly)
+            if (!open_options.create_if_notexist || open_options.readonly)
             {
                 ERROR_LOG("Dir:%s is not exist.", open_options.dir.c_str());
                 return -1;
@@ -154,27 +154,17 @@ namespace mmkv
         }
 
         madvise(data_buf.buf, data_buf.size, MADV_RANDOM);
+        m_data_buf = data_buf.buf;
+        m_open_options = open_options;
+        ReCreate(open_ret == 1);
+        Meta* meta = (Meta*) ((char*) data_buf.buf + kHeaderLength);
 
-        Meta* meta = (Meta*) data_buf.buf;
-        Header* header = (Header*) data_buf.buf + kMetaLength;
-        bool create_memory = false;
-        if (open_ret == 1) //create file
+        void* key_space = (char*) meta + kHeaderLength + kMetaLength;
+        void* value_space = NULL;
+        if (meta->IsKeyValueSplit())
         {
-            create_memory = true;
-            meta->size = open_options.create_options.size;
-            meta->init_key_space_size = (int64_t) (meta->size * open_options.create_options.keyspace_factor);
-            //allign key space size to 4096(page size)
-            uint32_t page_size = 4096;
-            meta->init_key_space_size = allign_size(meta->init_key_space_size, page_size);
-            meta->init_value_space_size = meta->size - meta->init_key_space_size - kMetaLength - kHeaderLength;
+            value_space = (char*) key_space + meta->init_key_space_size;
         }
-
-        void* key_space = data_buf.buf + kMetaLength + kHeaderLength;
-        void* value_space = data_buf.buf + kMetaLength + kHeaderLength + meta->init_key_space_size;
-        m_key_space.buf = create_mspace_with_base(key_space, meta->init_key_space_size, 0);
-        m_key_space.size = meta->init_key_space_size;
-        m_value_space.buf = create_mspace_with_base(value_space, meta->init_value_space_size, 0);
-        m_value_space.size = meta->init_value_space_size;
 
         if (!open_options.readonly)
         {
@@ -182,23 +172,71 @@ namespace mmkv
             {
                 mlock(key_space, meta->init_key_space_size);
             }
-            if (open_options.reserve_valuespace)
+            if (open_options.reserve_valuespace && NULL != value_space)
             {
-                mlock(value_space, meta->init_value_space_size);
+                mlock(value_space, meta->size - meta->init_key_space_size);
             }
         }
-
-        if (create_memory)
-        {
-            StringObjectTableAllocator allocator(m_key_space, m_value_space);
-            memset(header->named_objects, 0, sizeof(StringObjectTable));
-            ::new ((void*) (header->named_objects)) StringObjectTable(std::less<Object>(), allocator);
-        }
-        m_named_objs = (StringObjectTable*) (header->named_objects);
         if (open_options.verify)
         {
             m_named_objs->verify();
         }
+        return 0;
+    }
+
+    int MemorySegmentManager::ReCreate(bool overwrite)
+    {
+        MemorySpaceInfo key_space_info, value_space_info;
+        key_space_info.is_keyspace = true;
+        key_space_info.space = m_data_buf;
+        value_space_info.space = m_data_buf;
+        value_space_info.is_keyspace = false;
+
+        Meta* meta = (Meta*) m_data_buf;
+        Header* header = (Header*) ((char*) m_data_buf + kMetaLength);
+        if (overwrite) //create file
+        {
+            meta->size = m_open_options.create_options.size - kHeaderLength - kMetaLength;
+            meta->init_key_space_size = (int64_t) (meta->size * m_open_options.create_options.keyspace_factor);
+            //allign key space size to 4096(page size)
+            uint32_t page_size = 4096;
+            meta->init_key_space_size = allign_size(meta->init_key_space_size, page_size);
+        }
+
+        void* key_space = (char*) meta + kHeaderLength + kMetaLength;
+        void* key_mspace = create_mspace_with_base(key_space, meta->init_key_space_size, 0, overwrite);
+
+        void* value_space = NULL;
+        void* value_mspace = NULL;
+        if (meta->IsKeyValueSplit())
+        {
+            value_space = (char*) key_space + meta->init_key_space_size;
+            value_mspace = create_mspace_with_base(value_space, meta->size - meta->init_key_space_size, 0, overwrite);
+
+        }
+        if (overwrite)
+        {
+            meta->keyspace_offset = (char*) key_mspace - (char*) m_data_buf;
+            if (NULL != value_mspace)
+            {
+                meta->valuespace_offset = (char*) value_mspace - (char*) m_data_buf;
+            }
+            else
+            {
+                meta->valuespace_offset = meta->keyspace_offset;
+            }
+
+        }
+
+        m_key_allocator = Allocator<char>(key_space_info);
+        m_value_allocator = Allocator<char>(value_space_info);
+        if (overwrite)
+        {
+            StringObjectTableAllocator allocator(m_key_allocator);
+            memset(header->named_objects, 0, sizeof(StringObjectTable));
+            ::new ((void*) (header->named_objects)) StringObjectTable(std::less<Object>(), allocator);
+        }
+        m_named_objs = (StringObjectTable*) (header->named_objects);
         return 0;
     }
 
@@ -248,10 +286,11 @@ namespace mmkv
         }
         if (value.Len() <= 8 || value.Value() == NULL)
         {
-            if(value.Value() == NULL)
+            if (value.Value() == NULL)
             {
-                obj.SetInteger((int64_t)(value.Len()));
-            }else
+                obj.SetInteger((int64_t) (value.Len()));
+            }
+            else
             {
                 obj.encoding = OBJ_ENCODING_RAW;
                 obj.len = value.Len();
@@ -268,44 +307,34 @@ namespace mmkv
 
     void* MemorySegmentManager::Allocate(size_t size, bool in_keyspace)
     {
-        void* p = mspace_malloc(in_keyspace ? m_key_space.buf : m_value_space.buf, size);
-        if (NULL == p)
+        if (in_keyspace)
         {
-            throw std::bad_alloc();
+            return m_key_allocator.allocate(size);
         }
-        return p;
+        else
+        {
+            return m_value_allocator.allocate(size);
+        }
     }
     void MemorySegmentManager::Deallocate(void* ptr)
     {
-        if(NULL == ptr)
+        if (NULL == ptr)
         {
             return;
         }
-        if (ptr > m_value_space.buf)
-        {
-            mspace_free(m_value_space.buf, ptr);
-        }
-        else if(ptr > m_key_space.buf)
-        {
-            mspace_free(m_key_space.buf, ptr);
-        }else
-        {
-            abort();
-        }
+        m_key_allocator.deallocate_ptr((char*) ptr);
     }
     Allocator<char> MemorySegmentManager::GetKeySpaceAllocator()
     {
-        Allocator<char> allocator(m_key_space, m_value_space);
-        return allocator;
+        return m_key_allocator;
     }
     Allocator<char> MemorySegmentManager::GetValueSpaceAllocator()
     {
-        Allocator<char> allocator(m_value_space, m_key_space);
-        return allocator;
+        return m_value_allocator;
     }
     bool MemorySegmentManager::Lock(LockMode mode)
     {
-        if(!LockEnable())
+        if (!LockEnable())
         {
             return true;
         }
@@ -329,7 +358,7 @@ namespace mmkv
     }
     bool MemorySegmentManager::Unlock(LockMode mode)
     {
-        if(!LockEnable())
+        if (!LockEnable())
         {
             return true;
         }
@@ -375,34 +404,26 @@ namespace mmkv
 
     size_t MemorySegmentManager::KeySpaceUsed()
     {
-        return mspace_used(m_key_space.buf);
+        return mspace_used(m_key_allocator.get_mspace());
     }
 
     size_t MemorySegmentManager::keySpaceCapacity()
     {
-        return mspace_footprint(m_key_space.buf);
+        return mspace_footprint(m_key_allocator.get_mspace());
     }
 
     size_t MemorySegmentManager::ValueSpaceUsed()
     {
-        return mspace_used(m_value_space.buf);
+        return mspace_used(m_value_allocator.get_mspace());
     }
     size_t MemorySegmentManager::ValueSpaceCapacity()
     {
-        return mspace_footprint(m_value_space.buf);
+        return mspace_footprint(m_value_allocator.get_mspace());
     }
     bool MemorySegmentManager::LockEnable()
     {
         return m_lock_enable;
     }
 
-    int MemorySegmentManager::SyncKeySpace()
-    {
-        return msync(m_key_space.buf, m_key_space.size, MS_INVALIDATE | MS_SYNC);
-    }
-    int MemorySegmentManager::SyncValueSpace()
-    {
-        return msync(m_value_space.buf, m_value_space.size, MS_INVALIDATE | MS_SYNC);
-    }
 }
 

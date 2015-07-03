@@ -17,8 +17,8 @@
 // multiple sorted associative container interface (a.k.a multiset<>) using a
 // btree. See btree.h for details of the btree implementation and caveats.
 
-#ifndef UTIL_BTREE_BTREE_SET_H__
-#define UTIL_BTREE_BTREE_SET_H__
+#ifndef MMKV_UTIL_BTREE_BTREE_SET_H__
+#define MMKV_UTIL_BTREE_BTREE_SET_H__
 
 #include <functional>
 #include <memory>

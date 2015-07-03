@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef UTIL_BTREE_BTREE_CONTAINER_H__
-#define UTIL_BTREE_BTREE_CONTAINER_H__
+#ifndef MMKV_UTIL_BTREE_BTREE_CONTAINER_H__
+#define MMKV_UTIL_BTREE_BTREE_CONTAINER_H__
 
 #include <iosfwd>
 #include <utility>

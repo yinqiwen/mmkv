@@ -19,8 +19,8 @@
 // multimap<>) using a btree. See btree.h for details of the btree
 // implementation and caveats.
 
-#ifndef UTIL_BTREE_BTREE_MAP_H__
-#define UTIL_BTREE_BTREE_MAP_H__
+#ifndef MMKV_UTIL_BTREE_BTREE_MAP_H__
+#define MMKV_UTIL_BTREE_BTREE_MAP_H__
 
 #include <algorithm>
 #include <functional>

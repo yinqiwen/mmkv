@@ -36,9 +36,9 @@
 #include <string.h>
 #include <vector>
 #include <utility>
-#include "options.hpp"
 #include "mmkv_logger.hpp"
-#include "allocator.hpp"
+#include "mmkv_allocator.hpp"
+#include "mmkv_options.hpp"
 
 namespace mmkv
 {

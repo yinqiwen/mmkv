@@ -35,10 +35,10 @@
 #include <vector>
 #include "logger_macros.hpp"
 #include "memory.hpp"
-#include "options.hpp"
 #include "types.hpp"
 #include "mmkv_logger.hpp"
 #include "mmkv.hpp"
+#include "mmkv_options.hpp"
 
 namespace mmkv
 {

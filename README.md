@@ -18,7 +18,7 @@ MMKV depends on `boost`, if the `boost` headers could not found by the compiler 
 - Multiple processes concurrency suported
 - Most redis data stuctures&api suported
 - Custom POD type supported.
-- Very fast, which have similar performance compared to same data structure in memory, 10X+ faster than boost interprocess(1.4.6).
+- Very fast, which have similar performance compared to same data structure in memory.
 
 
 ## Warnings

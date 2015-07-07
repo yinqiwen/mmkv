@@ -40,7 +40,7 @@
 #include <set>
 #include <map>
 #include <alloca.h>
-#include "allocator.hpp"
+#include "mmkv_allocator.hpp"
 
 namespace mmkv
 {

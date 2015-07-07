@@ -26,40 +26,19 @@
  *ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
  *THE POSSIBILITY OF SUCH DAMAGE.
  */
-#include <stdio.h>
-#include "string_test.cpp"
-#include "list_test.cpp"
-#include "hash_test.cpp"
-#include "set_test.cpp"
-#include "hyperloglog_test.cpp"
-#include "zset_test.cpp"
-#include "pod_test.cpp"
-#include "performance_test.cpp"
-#include "concurrent_test.cpp"
-#include "backup_test.cpp"
 
+#include "ut.hpp"
+#include "utils.hpp"
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <vector>
 
-mmkv::MMKV* g_test_kv = NULL;
-
-using namespace mmkv;
-static int init_mmkv()
+TEST(Save, Backup)
 {
-    OpenOptions open_options;
-    open_options.use_lock = true;
-    open_options.create_if_notexist = true;
-    open_options.create_options.size = 10 * 1024 * 1024 * 1024LL;
-    return MMKV::Open(open_options, g_test_kv);
+    g_test_kv->Backup("./backup");
+    g_test_kv->Restore("./backup", "./restore");
+    CHECK_EQ(bool, g_test_kv->CheckEqual("./restore"), true, "");
 }
 
-int main()
-{
-    int err = 0;
-    if((err = init_mmkv()) != 0)
-    {
-        printf("Failed to init mmkv for err code:%d!\n", err);
-        return 0;
-    }
-    mmkv::RunAllTests();
-    printf("##KeySpaceUsed:%llu, ValueSpaceUsed:%llu\n", g_test_kv->KeySpaceUsed(), g_test_kv->ValueSpaceUsed());
-    return 0;
-}
+

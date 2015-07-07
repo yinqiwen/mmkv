@@ -343,7 +343,9 @@ namespace mmkv
 
             int RemoveExpiredKeys(uint32_t max_removed , uint32_t max_time);
 
-
+            int Backup(const std::string& dir);
+            int Restore(const std::string& backup_dir, const std::string& to_dir);
+            bool CheckEqual(const std::string& dir);
             ~MMKVImpl();
     };
 

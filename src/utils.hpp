@@ -75,6 +75,15 @@ namespace mmkv
         int diff = max - min;
         return (int) (((double) (diff + 1) / RAND_MAX) * rand() + min);
     }
+
+    typedef void lz4_compress_callback(const void* data, uint32_t len, void* cbdata);
+    typedef lz4_compress_callback lz4_decompress_callback;
+
+    int lz4_compress_tofile(const char* in, size_t in_size, FILE *out, lz4_compress_callback* cb = NULL, void* data =
+            NULL);
+    int lz4_decompress_tofile(const char* in, size_t in_size, FILE *out, size_t* decomp_size,
+            lz4_decompress_callback* cb = NULL, void* data = NULL);
+//    int lz4_decompress_fromfile();
 }
 
 #endif /* UTILS_HPP_ */

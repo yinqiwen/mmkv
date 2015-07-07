@@ -42,12 +42,13 @@ namespace mmkv
 {
     struct Meta
     {
+            size_t file_size;
             size_t size;
             size_t init_key_space_size;
             size_t keyspace_offset;
             size_t valuespace_offset;
             Meta() :
-                    size(0), init_key_space_size(0), keyspace_offset(0), valuespace_offset(0)
+                    file_size(0), size(0), init_key_space_size(0), keyspace_offset(0), valuespace_offset(0)
             {
             }
             inline bool IsKeyValueSplit()

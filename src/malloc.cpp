@@ -1189,6 +1189,8 @@ extern "C"
 
     size_t mspace_used(mspace msp);
 
+    void* mspace_top_address(mspace msp);
+
 #if !NO_MALLINFO
     /*
      mspace_mallinfo behaves as mallinfo, but reports properties of
@@ -5380,6 +5382,13 @@ size_t mspace_used(mspace msp)
     {
         USAGE_ERROR_ACTION(ms, ms);
     }
+}
+
+void* mspace_top_address(mspace msp)
+{
+    mstate ms = (mstate) msp;
+    mchunkptr topchunk = ms->top.get();
+    return chunk2mem(topchunk);
 }
 
 #if !NO_MALLINFO

@@ -80,7 +80,7 @@ namespace mmkv
         {
             if (file_st.st_size != 0 && (size_t)file_st.st_size != size)
             {
-                ERROR_LOG("Failed to open write  mmap file:%s since passed size", path.c_str());
+                ERROR_LOG("Failed to open write  mmap file:%s since passed size:%llu", path.c_str(), size);
                 close(fd);
                 return -1;
             }
@@ -123,8 +123,18 @@ namespace mmkv
         return Init(path, 0, true, false);
     }
 
+    int MMapBuf::Close()
+    {
+        munmap(buf, size);
+        return 0;
+    }
+
     MMapBuf::~MMapBuf()
     {
+        if(atuoclose)
+        {
+            Close();
+        }
     }
 
 }

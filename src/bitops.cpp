@@ -36,7 +36,7 @@ namespace mmkv
     /* Count number of bits set in the binary array pointed by 's' and long
      * 'count' bytes. The implementation of this function is required to
      * work with a input string length up to 512 MB. */
-    size_t redisPopcount(void *s, long count)
+    size_t redis_popcount(void *s, long count)
     {
         size_t bits = 0;
         unsigned char *p = (unsigned char *)s;
@@ -252,7 +252,7 @@ namespace mmkv
         else
         {
             long bytes = end - start + 1;
-            return redisPopcount(p + start, bytes);
+            return redis_popcount(p + start, bytes);
         }
     }
     /* -----------------------------------------------------------------------------

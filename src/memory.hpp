@@ -145,6 +145,9 @@ namespace mmkv
             bool LockEnable();
 
             bool Verify();
+            int Backup(const std::string& dir);
+            int Restore(const std::string& from_dir, const std::string& to_dir);
+            bool CheckEqual(const std::string& dir);
 
     };
 }

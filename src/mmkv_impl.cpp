@@ -701,6 +701,8 @@ namespace mmkv
     {
         m_kvs.clear();
         m_segment.ReCreate(true);
+        m_ttlset = NULL;
+        m_ttlmap = NULL;
         ReOpen();
         return 0;
     }
@@ -744,6 +746,19 @@ namespace mmkv
             removed++;
         }
         return removed;
+    }
+
+    int MMKVImpl::Backup(const std::string& dir)
+    {
+        return m_segment.Backup(dir);
+    }
+    int MMKVImpl::Restore(const std::string& backup_dir, const std::string& to_dir)
+    {
+        return m_segment.Restore(backup_dir, to_dir);
+    }
+    bool MMKVImpl::CheckEqual(const std::string& dir)
+    {
+        return m_segment.CheckEqual(dir);
     }
 
     MMKVImpl::~MMKVImpl()

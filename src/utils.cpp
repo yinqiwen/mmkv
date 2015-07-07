@@ -40,6 +40,7 @@
 #include <string.h>
 #include <limits.h>
 #include "utils.hpp"
+#include "lz4.h"
 namespace mmkv
 {
     bool is_file_exist(const std::string& path)
@@ -348,6 +349,125 @@ namespace mmkv
             return 11 + (v >= P11);
         }
         return 12 + digits10(v / P12);
+    }
+
+    int lz4_compress_tofile(const char* in, size_t in_size, FILE *out, lz4_compress_callback* cb, void* data)
+    {
+        size_t messageMaxBytes = 1024 * 1024;
+        LZ4_stream_t* const lz4Stream = LZ4_createStream();
+        const size_t cmpBufBytes = LZ4_COMPRESSBOUND(messageMaxBytes);
+        char cmpBuf[cmpBufBytes];
+        int inp_offset = 0;
+
+        size_t rest = in_size - inp_offset;
+        while (rest > 0)
+        {
+            const char* inp_ptr = in + inp_offset;
+            // Read line to the ring buffer.
+            uint32_t inpBytes = rest > messageMaxBytes ? messageMaxBytes : rest;
+            const int cmpBytes = LZ4_compress_continue(lz4Stream, inp_ptr, cmpBuf, inpBytes);
+            if (cmpBytes <= 0)
+                break;
+            if (fwrite(&inpBytes, sizeof(uint32_t), 1, out) != 1)
+            {
+                LZ4_freeStream(lz4Stream);
+                return -1;
+            }
+            if (fwrite(&cmpBytes, sizeof(uint32_t), 1, out) != 1)
+            {
+                LZ4_freeStream(lz4Stream);
+                return -1;
+            }
+            if (fwrite(cmpBuf, 1, cmpBytes, out) != cmpBytes)
+            {
+                LZ4_freeStream(lz4Stream);
+                return -1;
+            }
+            if (NULL != cb)
+            {
+                cb(inp_ptr, inpBytes, data);
+            }
+            inp_offset += inpBytes;
+            rest = in_size - inp_offset;
+        }
+        uint32_t end_tag = 0;
+        if (fwrite(&end_tag, sizeof(uint32_t), 1, out) != 1)
+        {
+            return -1;
+        }
+        LZ4_freeStream(lz4Stream);
+        return 0;
+    }
+
+    int lz4_decompress_tofile(const char* in, size_t in_size, FILE *out, size_t* decomp_size,
+            lz4_decompress_callback* cb, void* data)
+    {
+        LZ4_streamDecode_t* const lz4StreamDecode = LZ4_createStreamDecode();
+        size_t messageMaxBytes = 1024 * 1024;
+        uint32_t total_len = 0;
+        char decom_buf[messageMaxBytes];
+
+        size_t inp_offset = 0;
+        size_t rest = in_size - inp_offset;
+        *decomp_size = 0;
+        while (rest > 0)
+        {
+            uint32_t orig_bytes = 0, cmp_bytes = 0;
+            if (rest < sizeof(uint32_t))
+            {
+                LZ4_freeStreamDecode(lz4StreamDecode);
+                return -1;
+            }
+            memcpy(&orig_bytes, in + inp_offset, sizeof(uint32_t));
+
+            if (orig_bytes > messageMaxBytes)
+            {
+                LZ4_freeStreamDecode(lz4StreamDecode);
+                return -1;
+            }
+            inp_offset += sizeof(uint32_t);
+            rest -= sizeof(uint32_t);
+            if (0 == orig_bytes)
+            {
+                break;
+            }
+            if (rest < sizeof(uint32_t))
+            {
+                LZ4_freeStreamDecode(lz4StreamDecode);
+                return -1;
+            }
+            memcpy(&cmp_bytes, in + inp_offset, sizeof(uint32_t));
+            if (cmp_bytes == 0)
+                break;
+            inp_offset += sizeof(uint32_t);
+            rest -= sizeof(uint32_t);
+            if (rest < cmp_bytes)
+            {
+                LZ4_freeStreamDecode(lz4StreamDecode);
+                return -1;
+            }
+            const int decBytes = LZ4_decompress_safe_continue(lz4StreamDecode, in + inp_offset, decom_buf, cmp_bytes, messageMaxBytes);
+            if (decBytes <= 0 || decBytes != orig_bytes)
+            {
+                LZ4_freeStreamDecode(lz4StreamDecode);
+                return -1;
+            }
+
+            if (fwrite(decom_buf, 1, orig_bytes, out) != orig_bytes)
+            {
+                LZ4_freeStreamDecode(lz4StreamDecode);
+                return -1;
+            }
+            if (NULL != cb)
+            {
+                cb(decom_buf, orig_bytes, data);
+            }
+            inp_offset += cmp_bytes;
+            rest -= cmp_bytes;
+        }
+        LZ4_freeStreamDecode(lz4StreamDecode);
+        *decomp_size = inp_offset;
+        return 0;
     }
 }
 

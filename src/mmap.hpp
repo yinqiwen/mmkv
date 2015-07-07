@@ -44,13 +44,16 @@ namespace mmkv
 
             char* buf;
             uint64_t size;
+            bool atuoclose;
         public:
-            MMapBuf(const Logger& logger) :
-                    m_logger(logger), buf(0), size(0)
+            MMapBuf(const Logger& logger, bool aclose = false) :
+                    m_logger(logger), buf(0), size(0),atuoclose(aclose)
             {
             }
             int OpenRead(const std::string& path);
             int OpenWrite(const std::string& path, int64_t size, bool create_if_notexist);
+
+            int Close();
 
             ~MMapBuf();
     };

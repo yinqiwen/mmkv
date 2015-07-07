@@ -558,6 +558,9 @@ namespace mmkv
 
             virtual int RemoveExpiredKeys(uint32_t max_removed = 10000, uint32_t max_time = 100) = 0;
 
+            virtual int Backup(const std::string& dir) = 0;
+            virtual int Restore(const std::string& backup_dir, const std::string& to_dir) = 0;
+            virtual bool CheckEqual(const std::string& dir) = 0;
             virtual ~MMKV()
             {
             }

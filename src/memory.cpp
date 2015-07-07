@@ -32,6 +32,7 @@
 #include "malloc-2.8.3.h"
 #include "mmkv_logger.hpp"
 #include "thread_local.hpp"
+#include "xxhash.h"
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -41,6 +42,7 @@
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <errno.h>
 
 #define UNLOCKED 0
 #define READ_LOCKED 1
@@ -53,6 +55,11 @@ namespace mmkv
     static const int kLocksFileLength = 4096;
     static pid_t g_current_pid = 0;
     static ThreadLocal<uint32_t> g_lock_state;
+    static const char* kBackupFileName = "mmkv.snapshot";
+    static const char* kDataFileName = "data";
+
+    static const uint32_t kMagicCode = 0xCD007B;
+    static const uint32_t kVersionCode = 1;
 
     static inline int64_t allign_size(int64_t size, uint32_t allignment)
     {
@@ -196,6 +203,7 @@ namespace mmkv
         Header* header = (Header*) ((char*) m_data_buf + kMetaLength);
         if (overwrite) //create file
         {
+            meta->file_size = m_open_options.create_options.size;
             meta->size = m_open_options.create_options.size - kHeaderLength - kMetaLength;
             meta->init_key_space_size = (int64_t) (meta->size * m_open_options.create_options.keyspace_factor);
             //allign key space size to 4096(page size)
@@ -402,6 +410,377 @@ namespace mmkv
         return true;
     }
 
+    static int dump_cksum_str(XXH64_state_t* cksm64, XXH32_state_t* cksm32, const std::string& dir, std::string& cksm)
+    {
+        char xxhashsum[256];
+        uint32_t offset = 0;
+        uint64_t tmp1 = XXH64_digest(cksm64);
+        uint32_t tmp2 = XXH32_digest(cksm32);
+        for (uint32_t i = 0; i < sizeof(uint64_t); i++)
+        {
+            int ret = sprintf(xxhashsum + offset, "%02x", (char*) (&tmp1) + i);
+            offset += ret;
+        }
+        for (uint32_t i = 0; i < sizeof(uint32_t); i++)
+        {
+            int ret = sprintf(xxhashsum + offset, "%02x", (char*) (&tmp2) + i);
+            offset += ret;
+        }
+        cksm = xxhashsum;
+        FILE* dest_file = fopen((dir + "/xxhash.cksm").c_str(), "w");
+        if (NULL == dest_file)
+        {
+            return -1;
+        }
+        fwrite(xxhashsum, 1, offset, dest_file);
+        fclose(dest_file);
+    }
+
+    static void xxhash_cksum_callback(const void* data, uint32_t len, void* cbdata)
+    {
+        void** tmp = (void**) cbdata;
+        XXH64_state_t* cksm64 = (XXH64_state_t*) tmp[0];
+        XXH32_state_t* cksm32 = (XXH32_state_t*) tmp[1];
+        XXH32_update(cksm32, data, len);
+        XXH64_update(cksm64, data, len);
+    }
+
+    int MemorySegmentManager::Backup(const std::string& dir)
+    {
+        int err = 0;
+        if (NULL == m_data_buf)
+        {
+            ERROR_LOG("Empty data to backup.");
+            return -1;
+        }
+        make_dir(dir);
+        std::string cksm;
+        XXH64_state_t* cksm64 = XXH64_createState();
+        XXH32_state_t* cksm32 = XXH32_createState();
+        void* chsumset[2];
+        XXH64_reset(cksm64, kMagicCode);
+        XXH32_reset(cksm32, kMagicCode);
+        chsumset[0] = cksm64;
+        chsumset[1] = cksm32;
+
+        Meta* meta = (Meta*) m_data_buf;
+        uint16_t meta_len = sizeof(Meta);
+        Header* header = (Header*) ((char*) m_data_buf + kMetaLength);
+        uint32_t header_len = sizeof(Header);
+        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(*this);
+        void* key_mspace = (char*) meta + meta->keyspace_offset;
+        void* key_space_start = (char*) meta + kMetaLength + kHeaderLength;
+        void* key_mspace_top = mspace_top_address(key_mspace);
+        void* value_mspace = (char*) meta + meta->valuespace_offset;
+        void* value_space_start = (char*) meta + kMetaLength + kHeaderLength + meta->init_key_space_size;
+        void* value_mspace_top = mspace_top_address(value_mspace);
+        uint32_t now = time(NULL);
+        char dest_file_path[dir.size() + 256];
+        sprintf(dest_file_path, "%s/%s", dir.c_str(), kBackupFileName, now);
+
+        FILE* dest_file = fopen(dest_file_path, "w");
+        if (NULL == dest_file)
+        {
+            ERROR_LOG("Failed to open backup file:%s to write.", dest_file_path);
+            return -1;
+        }
+        if (fwrite(&kMagicCode, sizeof(kMagicCode), 1, dest_file) != 1)
+        {
+            ERROR_LOG("Failed to save magic code");
+            err = -1;
+            goto _end;
+        }
+        if (fwrite(&kVersionCode, sizeof(kVersionCode), 1, dest_file) != 1)
+        {
+            ERROR_LOG("Failed to save version code");
+            err = -1;
+            goto _end;
+        }
+
+        //save meta content
+        if (fwrite(&meta_len, sizeof(meta_len), 1, dest_file) != 1)
+        {
+            ERROR_LOG("Failed to save meta length");
+            err = -1;
+            goto _end;
+        }
+        if (fwrite(meta, 1, meta_len, dest_file) != meta_len)
+        {
+            ERROR_LOG("Failed to save meta content");
+            err = -1;
+            goto _end;
+        }
+        xxhash_cksum_callback(meta, meta_len, chsumset);
+        //save header content
+        if (fwrite(&header_len, sizeof(header_len), 1, dest_file) != 1)
+        {
+            ERROR_LOG("Failed to save header length");
+            err = -1;
+            goto _end;
+        }
+        if (fwrite(header, 1, header_len, dest_file) != header_len)
+        {
+            ERROR_LOG("Failed to save header space content");
+            err = -1;
+            goto _end;
+        }
+        xxhash_cksum_callback(header, header_len, chsumset);
+        //compress & save key space
+        if (0
+                != lz4_compress_tofile((char*) key_space_start, (char*) key_mspace_top - (char*) key_space_start,
+                        dest_file, xxhash_cksum_callback, chsumset))
+        {
+            ERROR_LOG("Failed to compress key space content");
+            err = -1;
+            goto _end;
+        }
+        //compress & save value space
+        if (meta->IsKeyValueSplit())
+        {
+            if (0
+                    != lz4_compress_tofile((char*) value_space_start,
+                            (char*) value_mspace_top - (char*) value_space_start, dest_file, xxhash_cksum_callback,
+                            chsumset))
+            {
+                ERROR_LOG("Failed to compress value space content");
+                err = -1;
+                goto _end;
+            }
+        }
+
+        dump_cksum_str(cksm64, cksm32, dir, cksm);
+        INFO_LOG("Snapshot cksm:%s", cksm.c_str());
+        _end: fclose(dest_file);
+        XXH64_freeState(cksm64);
+        XXH32_freeState(cksm32);
+        return err;
+    }
+
+    int MemorySegmentManager::Restore(const std::string& from, const std::string& to)
+    {
+        FILE* dest_file = NULL;
+        int err = 0;
+        make_dir(to);
+        MMapBuf backup(m_logger);
+        uint32_t header_space_len = 0, key_space_len = 0, value_space_len = 0;
+        size_t chunk_decomp_size = 0;
+        size_t buf_cursor = 0;
+        char* compressed_key_space = NULL;
+        char* compressed_value_space = NULL;
+        std::string from_file = from + "/" + kBackupFileName;
+        std::string to_file = to + "/" + kDataFileName;
+        std::string cksm;
+        XXH64_state_t* cksm64 = XXH64_createState();
+        XXH32_state_t* cksm32 = XXH32_createState();
+        void* chsumset[2];
+        XXH64_reset(cksm64, kMagicCode);
+        XXH32_reset(cksm32, kMagicCode);
+        chsumset[0] = cksm64;
+        chsumset[1] = cksm32;
+        if (0 != backup.OpenRead(from_file))
+        {
+            ERROR_LOG("Failed to load backup file to resume.");
+            return -1;
+        }
+        uint32_t magic_code, version_code;
+        uint16_t meta_len = 0;
+        uint32_t header_len = 0;
+        Meta meta;
+        Header header;
+
+        if (backup.size < sizeof(meta_len) + sizeof(uint32_t) * 2)
+        {
+            ERROR_LOG("No sufficient space for  length header .");
+            err = -1;
+            goto _end;
+        }
+        memcpy(&magic_code, backup.buf, sizeof(uint32_t));
+        memcpy(&version_code, backup.buf + sizeof(uint32_t), sizeof(uint32_t));
+        memcpy(&meta_len, backup.buf + sizeof(uint32_t) * 2, sizeof(meta_len));
+        buf_cursor = sizeof(uint32_t) * 2 + sizeof(meta_len);
+        if (magic_code != kMagicCode)
+        {
+            ERROR_LOG("Wrong magic code in header.");
+            err = -1;
+            goto _end;
+        }
+        if (version_code == 0 || version_code > kVersionCode)
+        {
+            ERROR_LOG("Wrong version code:%d in header.", version_code);
+            err = -1;
+            goto _end;
+        }
+        if (backup.size < buf_cursor + meta_len)
+        {
+            ERROR_LOG("No sufficient space for meta content.");
+            err = -1;
+            goto _end;
+        }
+        if (meta_len > sizeof(Meta))
+        {
+            ERROR_LOG("Invalid meta len:%u", meta_len);
+            err = -1;
+            goto _end;
+        }
+        memcpy(&meta, backup.buf + buf_cursor, meta_len);
+        xxhash_cksum_callback(&meta, meta_len, chsumset);
+        buf_cursor += meta_len;
+
+        //load header
+        if (backup.size < buf_cursor + sizeof(uint32_t))
+        {
+            ERROR_LOG("No sufficient space for header len.");
+            err = -1;
+            goto _end;
+        }
+        memcpy(&header_len, backup.buf + buf_cursor, sizeof(uint32_t));
+        if (header_len > sizeof(Header) || backup.size < buf_cursor + header_len + sizeof(uint32_t))
+        {
+            ERROR_LOG("Invalid header len:%u compare to %u", header_len, sizeof(Header));
+            err = -1;
+            goto _end;
+        }
+        buf_cursor += sizeof(uint32_t);
+        memcpy(&header, backup.buf + buf_cursor, header_len);
+        xxhash_cksum_callback(&header, header_len, chsumset);
+
+        buf_cursor += header_len;
+        dest_file = fopen(to_file.c_str(), "w");
+        if (NULL == dest_file)
+        {
+            ERROR_LOG("Failed to open backup file:%s to write.", to.c_str());
+            err = -1;
+            goto _end;
+        }
+        ftruncate(fileno(dest_file), meta.file_size);
+
+        fseek(dest_file, 0, SEEK_SET);
+        if (fwrite(&meta, 1, sizeof(meta), dest_file) != sizeof(meta))
+        {
+            ERROR_LOG("Failed to write meta content in backup file.");
+            err = -1;
+            goto _end;
+        }
+        fseek(dest_file, kMetaLength, SEEK_SET);
+        if (fwrite(&header, 1, sizeof(header), dest_file) != sizeof(header))
+        {
+            ERROR_LOG("Failed to write header content in backup file.");
+            err = -1;
+            goto _end;
+        }
+        fseek(dest_file, kMetaLength + kHeaderLength, SEEK_SET);
+
+        compressed_key_space = backup.buf + buf_cursor;
+        if (lz4_decompress_tofile(compressed_key_space, backup.size - buf_cursor, dest_file, &chunk_decomp_size,
+                xxhash_cksum_callback, chsumset) != 0)
+        {
+            ERROR_LOG("decompress header content failed");
+            err = -1;
+            goto _end;
+        }
+        //
+        buf_cursor += chunk_decomp_size;
+        fseek(dest_file, kMetaLength + kHeaderLength + meta.init_key_space_size, SEEK_SET);
+        compressed_value_space = backup.buf + buf_cursor;
+        if (meta.IsKeyValueSplit())
+        {
+            if (lz4_decompress_tofile(compressed_value_space, backup.size - buf_cursor, dest_file, &chunk_decomp_size,
+                    xxhash_cksum_callback, chsumset) != 0)
+            {
+                ERROR_LOG("decompress value space content failed");
+                err = -1;
+                goto _end;
+            }
+        }
+
+        dump_cksum_str(cksm64, cksm32, to, cksm);
+        INFO_LOG("Restore cksm:%s", cksm.c_str());
+        _end: backup.Close();
+        if (NULL != dest_file)
+        {
+            fclose(dest_file);
+        }
+        XXH64_freeState(cksm64);
+        XXH32_freeState(cksm32);
+        return err;
+    }
+
+    bool MemorySegmentManager::CheckEqual(const std::string& dir)
+    {
+        MMapBuf cmpbuf(m_logger, true);
+        if (0 != cmpbuf.OpenRead(dir + "/" + kDataFileName))
+        {
+            ERROR_LOG("Failed to load compare file.");
+            return false;
+        }
+        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(*this);
+        if (0 != memcmp(m_data_buf, cmpbuf.buf, sizeof(Meta)))
+        {
+            ERROR_LOG("Meta part is not equal.");
+            return false;
+        }
+        if (0 != memcmp((char*) m_data_buf + kMetaLength, cmpbuf.buf + kMetaLength, sizeof(Header)))
+        {
+            ERROR_LOG("Header part is not equal.");
+            return false;
+        }
+        Meta* meta = (Meta*) m_data_buf;
+        char* key_mspace = (char*) meta + meta->keyspace_offset;
+        char* key_space_start = (char*) meta + kMetaLength + kHeaderLength;
+        char* key_mspace_stop = (char*) mspace_top_address(key_mspace);
+        char* value_mspace = (char*) meta + meta->valuespace_offset;
+        char* value_space_start = (char*) meta + kMetaLength + kHeaderLength + meta->init_key_space_size;
+        char* value_mspace_stop = (char*) mspace_top_address(value_mspace);
+
+        char* other_key_mspace = cmpbuf.buf + meta->keyspace_offset;
+        char* other_key_space_start = cmpbuf.buf + kMetaLength + kHeaderLength;
+        char* other_key_mspace_stop = (char*)mspace_top_address(other_key_mspace);
+        char* other_value_mspace = cmpbuf.buf + meta->valuespace_offset;
+        char* other_value_space_start = cmpbuf.buf + kMetaLength + kHeaderLength + meta->init_key_space_size;
+        char* other_value_mspace_stop = (char*)mspace_top_address(other_value_mspace);
+
+        if (key_mspace_stop - key_space_start != other_key_mspace_stop - other_key_space_start)
+        {
+            WARN_LOG("Key space length is not equal.");
+            return false;
+        }
+        size_t cmpoff = 0;
+        size_t rest = key_mspace_stop - key_space_start;
+        while (rest > 0)
+        {
+            size_t len = rest > 4096 ? 4096 : rest;
+            if (0 != memcmp(key_space_start + cmpoff, other_key_space_start + cmpoff, len))
+            {
+                WARN_LOG("Key space  is not equal at offset:%llu with len:%u.", cmpoff, len);
+                return false;
+            }
+            cmpoff += len;
+            rest -= len;
+        }
+        if (meta->IsKeyValueSplit())
+        {
+            if (value_mspace_stop - value_space_start != other_value_mspace_stop - other_value_space_start)
+            {
+                WARN_LOG("Value space length is not equal.");
+                return false;
+            }
+            cmpoff = 0;
+            rest = value_mspace_stop - value_space_start;
+            while (rest > 0)
+            {
+                size_t len = rest > 4096 ? 4096 : rest;
+                if (0 != memcmp(value_space_start + cmpoff, other_value_space_start + cmpoff, len))
+                {
+                    WARN_LOG("Value space  is not equal at offset:%llu with len:%u.", cmpoff, len);
+                    return false;
+                }
+                cmpoff += len;
+                rest -= len;
+            }
+        }
+        return true;
+    }
+
     size_t MemorySegmentManager::KeySpaceUsed()
     {
         return mspace_used(m_key_allocator.get_mspace());
@@ -424,6 +803,5 @@ namespace mmkv
     {
         return m_lock_enable;
     }
-
 }
 

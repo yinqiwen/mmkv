@@ -106,6 +106,35 @@ namespace mmkv
         m_logger = logger;
     }
 
+    int MemorySegmentManager::PostInit()
+    {
+        Meta* meta = (Meta*) m_data_buf;
+        madvise(m_data_buf, meta->file_size, MADV_RANDOM);
+        void* key_space = (char*) meta + kHeaderLength + kMetaLength;
+        void* value_space = NULL;
+        if (meta->IsKeyValueSplit())
+        {
+            value_space = (char*) key_space + meta->init_key_space_size;
+        }
+
+        if (!m_open_options.readonly)
+        {
+            if (m_open_options.reserve_keyspace)
+            {
+                mlock(key_space, meta->init_key_space_size);
+            }
+            if (m_open_options.reserve_valuespace && NULL != value_space)
+            {
+                mlock(value_space, meta->size - meta->init_key_space_size);
+            }
+        }
+        if (m_open_options.verify)
+        {
+            m_named_objs->verify();
+        }
+        return 0;
+    }
+
     int MemorySegmentManager::Open(const OpenOptions& open_options)
     {
         if (!is_dir_exist(open_options.dir))
@@ -160,34 +189,10 @@ namespace mmkv
             return -1;
         }
 
-        madvise(data_buf.buf, data_buf.size, MADV_RANDOM);
         m_data_buf = data_buf.buf;
         m_open_options = open_options;
         ReCreate(open_ret == 1);
-        Meta* meta = (Meta*) ((char*) data_buf.buf + kHeaderLength);
-
-        void* key_space = (char*) meta + kHeaderLength + kMetaLength;
-        void* value_space = NULL;
-        if (meta->IsKeyValueSplit())
-        {
-            value_space = (char*) key_space + meta->init_key_space_size;
-        }
-
-        if (!open_options.readonly)
-        {
-            if (open_options.reserve_keyspace)
-            {
-                mlock(key_space, meta->init_key_space_size);
-            }
-            if (open_options.reserve_valuespace && NULL != value_space)
-            {
-                mlock(value_space, meta->size - meta->init_key_space_size);
-            }
-        }
-        if (open_options.verify)
-        {
-            m_named_objs->verify();
-        }
+        PostInit();
         return 0;
     }
 
@@ -220,7 +225,6 @@ namespace mmkv
         {
             value_space = (char*) key_space + meta->init_key_space_size;
             value_mspace = create_mspace_with_base(value_space, meta->size - meta->init_key_space_size, 0, overwrite);
-
         }
         if (overwrite)
         {
@@ -233,7 +237,6 @@ namespace mmkv
             {
                 meta->valuespace_offset = meta->keyspace_offset;
             }
-
         }
 
         m_key_allocator = Allocator<char>(key_space_info);
@@ -246,6 +249,64 @@ namespace mmkv
         }
         m_named_objs = (StringObjectTable*) (header->named_objects);
         return 0;
+    }
+
+    int MemorySegmentManager::EnsureWritableSpace(size_t space_size)
+    {
+        if (m_open_options.readonly)
+        {
+            ERROR_LOG("Permission denied to expand.");
+            return -1;
+        }
+        Meta* meta = (Meta*) m_data_buf;
+        size_t total_size = mspace_top_size((char*) (meta) + meta->keyspace_offset);
+        if(meta->IsKeyValueSplit())
+        {
+            total_size += mspace_top_size((char*) (meta) + meta->valuespace_offset);
+        }
+        if(total_size < space_size)
+        {
+            size_t new_size = meta->file_size * 2;
+            return Expand(new_size);
+        }
+        return 0;
+    }
+
+    int MemorySegmentManager::Expand(size_t new_size)
+    {
+        if (m_open_options.readonly)
+        {
+            ERROR_LOG("Permission denied to expand.");
+            return -1;
+        }
+        Meta* meta = (Meta*) m_data_buf;
+        if (meta->file_size >= new_size)
+        {
+            return 0;
+        }
+        size_t inc = new_size - meta->file_size;
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(*this);
+        munmap(m_data_buf, meta->file_size);
+        char data_path[m_open_options.dir.size() + 100];
+        sprintf(data_path, "%s/data", m_open_options.dir.c_str());
+        truncate(data_path, new_size);
+        m_open_options.create_options.size = new_size;
+        MMapBuf data_buf(m_logger);
+        int open_ret = data_buf.OpenWrite(data_path, new_size, false);
+        if (open_ret < 0)
+        {
+            return -1;
+        }
+        madvise(data_buf.buf, data_buf.size, MADV_RANDOM);
+        m_data_buf = data_buf.buf;
+        ReCreate(false);
+        PostInit();
+        meta = (Meta*) m_data_buf;
+        meta->file_size = m_open_options.create_options.size;
+        meta->size = m_open_options.create_options.size - kHeaderLength - kMetaLength;
+        void* value_mspace = (char*) m_data_buf + meta->valuespace_offset;
+        mspace_inc_size(value_mspace, inc);
+        return 1;
     }
 
     bool MemorySegmentManager::ObjectMakeRoom(Object& obj, size_t size, bool in_keyspace)
@@ -395,7 +456,7 @@ namespace mmkv
             return true;
         }
         uint32_t lock_state = g_lock_state.GetValue();
-        return readonly ? lock_state == READ_LOCK : lock_state == WRITE_LOCK;
+        return readonly ? lock_state == READ_LOCKED : lock_state == WRITE_LOCKED;
     }
 
     bool MemorySegmentManager::Verify()
@@ -734,10 +795,10 @@ namespace mmkv
 
         char* other_key_mspace = cmpbuf.buf + meta->keyspace_offset;
         char* other_key_space_start = cmpbuf.buf + kMetaLength + kHeaderLength;
-        char* other_key_mspace_stop = (char*)mspace_top_address(other_key_mspace);
+        char* other_key_mspace_stop = (char*) mspace_top_address(other_key_mspace);
         char* other_value_mspace = cmpbuf.buf + meta->valuespace_offset;
         char* other_value_space_start = cmpbuf.buf + kMetaLength + kHeaderLength + meta->init_key_space_size;
-        char* other_value_mspace_stop = (char*)mspace_top_address(other_value_mspace);
+        char* other_value_mspace_stop = (char*) mspace_top_address(other_value_mspace);
 
         if (key_mspace_stop - key_space_start != other_key_mspace_stop - other_key_space_start)
         {

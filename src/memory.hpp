@@ -64,11 +64,14 @@ namespace mmkv
             {
                 return *m_named_objs;
             }
+            int PostInit();
+            int Expand(size_t new_size);
         public:
             MemorySegmentManager();
             void SetLogger(const Logger& logger);
             int ReCreate(bool overwrite);
             int Open(const OpenOptions& open_options);
+            int EnsureWritableSpace(size_t space_size);
 
             bool AssignObjectValue(Object& obj, const Data& value, bool in_keyspace = false, bool try_int_encoding =
                     true);

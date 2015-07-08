@@ -561,6 +561,7 @@ namespace mmkv
             virtual int Backup(const std::string& dir) = 0;
             virtual int Restore(const std::string& backup_dir, const std::string& to_dir) = 0;
             virtual bool CheckEqual(const std::string& dir) = 0;
+            virtual int EnsureWritableSpace(size_t space_size) = 0;
             virtual ~MMKV()
             {
             }

@@ -78,13 +78,13 @@ namespace mmkv
         }
         else
         {
-            if (file_st.st_size != 0 && (size_t)file_st.st_size != size)
+            if (file_st.st_size != 0 && (size_t) file_st.st_size < size)
             {
-                ERROR_LOG("Failed to open write  mmap file:%s since passed size:%llu", path.c_str(), size);
+                ERROR_LOG("Failed to open write  mmap file:%s since passed size:%llu while file size:%llu", path.c_str(), size, file_st.st_size);
                 close(fd);
                 return -1;
             }
-            if (file_st.st_size == 0)
+            if (file_st.st_size < size)
             {
                 if (-1 == ftruncate(fd, size))
                 {
@@ -93,7 +93,11 @@ namespace mmkv
                     close(fd);
                     return -1;
                 }
-                create_file = true;
+                create_file = file_st.st_size == 0;
+            }
+            else
+            {
+                size = file_st.st_size;
             }
         }
 
@@ -131,7 +135,7 @@ namespace mmkv
 
     MMapBuf::~MMapBuf()
     {
-        if(atuoclose)
+        if (atuoclose)
         {
             Close();
         }

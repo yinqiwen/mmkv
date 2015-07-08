@@ -760,6 +760,18 @@ namespace mmkv
     {
         return m_segment.CheckEqual(dir);
     }
+    int MMKVImpl::EnsureWritableSpace(size_t space_size)
+    {
+        if(m_segment.EnsureWritableSpace(space_size) > 0)
+        {
+            m_kvs.clear();
+            m_ttlset = NULL;
+            m_ttlmap = NULL;
+            ReOpen();
+            return 1;
+        }
+        return 0;
+    }
 
     MMKVImpl::~MMKVImpl()
     {

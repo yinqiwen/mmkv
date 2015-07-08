@@ -37,8 +37,9 @@ namespace mmkv
     {
             int64_t size;
             float keyspace_factor;
+            bool autoexpand;
             CreateOptions() :
-                    size(1024 * 1024 * 1024), keyspace_factor(0.25)
+                    size(1024 * 1024 * 1024), keyspace_factor(0.25),autoexpand(false)
             {
             }
     };

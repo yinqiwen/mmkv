@@ -531,6 +531,8 @@ size_t mspace_max_footprint(mspace msp);
 size_t mspace_footprint(mspace msp);
 size_t mspace_used(mspace msp);
 void* mspace_top_address(mspace msp);
+size_t mspace_top_size(mspace msp);
+void mspace_inc_size(mspace msp, size_t inc);
 #endif  /* MSPACES */
 
 #ifdef __cplusplus

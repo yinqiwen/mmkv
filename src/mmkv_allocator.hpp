@@ -53,7 +53,7 @@ namespace mmkv
             }
             inline bool IsKeyValueSplit()
             {
-                return keyspace_offset != init_key_space_size;
+                return init_key_space_size != size;
             }
     };
     struct MemorySpaceInfo

@@ -1191,6 +1191,9 @@ extern "C"
 
     void* mspace_top_address(mspace msp);
 
+    void mspace_inc_size(mspace msp, size_t inc);
+    size_t mspace_top_size(mspace msp);
+
 #if !NO_MALLINFO
     /*
      mspace_mallinfo behaves as mallinfo, but reports properties of
@@ -5389,6 +5392,25 @@ void* mspace_top_address(mspace msp)
     mstate ms = (mstate) msp;
     mchunkptr topchunk = ms->top.get();
     return chunk2mem(topchunk);
+}
+
+void mspace_inc_size(mspace msp, size_t inc)
+{
+    mstate ms = (mstate) msp;
+    ms->topsize += inc;
+    ms->seg.size += inc;
+    ms->footprint += inc;
+    ms->max_footprint += inc;
+    mchunkptr topchunk = ms->top.get();
+    size_t new_size = chunksize(topchunk) + inc;
+    topchunk->head = new_size | pinuse(topchunk);
+    chunk_plus_offset(topchunk, new_size)->head = TOP_FOOT_SIZE;
+    //topchunk->head = (chunksize(topchunk) + inc) | PINUSE_BIT;
+}
+size_t mspace_top_size(mspace msp)
+{
+    mstate ms = (mstate) msp;
+    return ms->topsize;
 }
 
 #if !NO_MALLINFO

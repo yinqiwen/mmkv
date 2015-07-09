@@ -36,7 +36,13 @@
 #include <cstddef>
 #include <stdexcept>
 #include <boost/interprocess/offset_ptr.hpp>
-#include "malloc-2.8.3.h"
+
+extern "C" {
+    extern void* mspace_malloc(void* msp, size_t bytes);
+    extern void* mspace_realloc(void* msp, void* oldmem, size_t bytes);
+    extern size_t mspace_usable_size(void* mem);
+    extern void mspace_free(void* msp, void* mem);
+}
 
 namespace mmkv
 {

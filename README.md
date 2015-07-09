@@ -1,5 +1,6 @@
 # MMKV: Fast persistence key-value engine on memory mapped file
-[![Build Status](https://travis-ci.org/yinqiwen/mmkv.svg?branch=master)](https://travis-ci.org/yinqiwen/mmkv) 
+[![Build Status](https://travis-ci.org/yinqiwen/mmkv.svg?branch=master)](https://travis-ci.org/yinqiwen/mmkv)    
+
 MMKV is a BSD licensed, fast persistence key-value engine built on memory mapped file.
  
 

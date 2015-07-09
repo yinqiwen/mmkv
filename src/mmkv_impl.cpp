@@ -83,7 +83,7 @@ namespace mmkv
         return m_segment.ValueAllocator<char>();
     }
 
-    MMKVTable* MMKVImpl::GetMMKVTable(DBID db, bool create_if_notexist)
+    MMKVTable* MMKVImpl::GetMMKVTable(DBID db, bool create_if_notexist, bool lock)
     {
         MMKVTable* kv = NULL;
         {
@@ -106,12 +106,20 @@ namespace mmkv
         if (create_if_notexist && !m_readonly)
         {
             ObjectMapAllocator allocator(m_segment.GetKeySpaceAllocator());
-            RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
-            kv = m_segment.FindOrConstructObject<MMKVTable>(name)(allocator);
+            WriteLockGuard<MemorySegmentManager> keylock_guard(m_segment, lock);
+            bool created = false;
+            kv = m_segment.FindOrConstructObject<MMKVTable>(name, &created)(allocator);
+//            kv = m_segment.FindOrConstructObject<MMKVTable>(name, &created)(0, ObjectHash(), ObjectEqual(), allocator);
+            if (created)
+            {
+//                Object empty;
+//                kv->set_deleted_key(empty);
+//                kv->set_empty_key(empty);
+            }
         }
         else
         {
-            RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
+            ReadLockGuard<MemorySegmentManager> keylock_guard(m_segment, lock);
             kv = m_segment.FindObject<MMKVTable>(name);
         }
         if (NULL != kv)
@@ -130,15 +138,16 @@ namespace mmkv
         {
             return NULL;
         }
-        return &(found.value());
+        //return &(found.value());
+        return &(found->second);
     }
 
-    int MMKVImpl::ReOpen()
+    int MMKVImpl::ReOpen(bool lock)
     {
         if (!m_readonly)
         {
             TTLValueAllocator allocator(m_segment.GetKeySpaceAllocator());
-            RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+            WriteLockGuard<MemorySegmentManager> keylock_guard(m_segment, lock);
             m_ttlset = m_segment.FindOrConstructObject<TTLValueSet>(kTTLConstName)(std::less<TTLValue>(), allocator);
             bool created = false;
             TTLValuePairAllocator alloc2(m_segment.GetKeySpaceAllocator());
@@ -166,7 +175,7 @@ namespace mmkv
         {
             return -1;
         }
-        ReOpen();
+        ReOpen(true);
         if (open_options.verify)
         {
             //m_kv->verify();
@@ -228,7 +237,8 @@ namespace mmkv
         if (created_if_notexist)
         {
             std::pair<MMKVTable::iterator, bool> ret = kv->insert(MMKVTable::value_type(tmpkey, Object()));
-            value_data = const_cast<Object*>(&(ret.first.value()));
+//            value_data = const_cast<Object*>(&(ret.first.value()));
+            value_data = const_cast<Object*>(&(ret.first->second));
             if (ret.second)
             {
                 value_data->type = V_TYPE_POD;
@@ -246,7 +256,8 @@ namespace mmkv
             {
                 return ERR_ENTRY_NOT_EXIST;
             }
-            value_data = const_cast<Object*>(&(found.value()));
+            //value_data = const_cast<Object*>(&(found.value()));
+            value_data = const_cast<Object*>(&(found->second));
         }
         if (IsExpired(db, key, *value_data))
         {
@@ -456,13 +467,15 @@ namespace mmkv
         MMKVTable::iterator found = table->find(key);
         if (found != table->end())
         {
-            const Object& value_data = found.value();
+            //const Object& value_data = found.value();
+            const Object& value_data = found->second;
             int err = GenericDelValue(value_data);
             if (0 != err)
             {
                 return err;
             }
-            DestroyObjectContent(found.key());
+            //DestroyObjectContent(found.key());
+            DestroyObjectContent(found->first);
             table->erase(found);
             return 1;
         }
@@ -475,17 +488,20 @@ namespace mmkv
         std::pair<MMKVTable::iterator, bool> ret = table->insert(MMKVTable::value_type(tmpkey, v));
         if (!ret.second)
         {
-            const Object& old_data = ret.first.value();
+            //const Object& old_data = ret.first.value();
+            Object& old_data = ret.first->second;
             if (!replace)
             {
                 return 0;
             }
             GenericDelValue(old_data);
-            ret.first.value(v);
+            //ret.first.value(v);
+            old_data = v;
         }
         else
         {
-            m_segment.AssignObjectValue(const_cast<Object&>(ret.first.key()), key, false);
+            //m_segment.AssignObjectValue(const_cast<Object&>(ret.first.key()), key, false);
+            m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), key, false);
         }
         return 1;
     }
@@ -586,7 +602,8 @@ namespace mmkv
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-        SetTTL(db, key, const_cast<Object&>(found.value()), milliseconds_timestamp * 1000);
+//        SetTTL(db, key, const_cast<Object&>(found.value()), milliseconds_timestamp * 1000);
+        SetTTL(db, key, found->second, milliseconds_timestamp * 1000);
         return 0;
     }
 
@@ -606,14 +623,17 @@ namespace mmkv
         }
 
         Object tmpkey2(dest_key);
-        std::pair<MMKVTable::iterator, bool> ret = dst_kv->insert(MMKVTable::value_type(tmpkey2, found.value()));
-        const Object& kk = ret.first.key();
+//        std::pair<MMKVTable::iterator, bool> ret = dst_kv->insert(MMKVTable::value_type(tmpkey2, found.value()));
+//        const Object& kk = ret.first.key();
+        std::pair<MMKVTable::iterator, bool> ret = dst_kv->insert(MMKVTable::value_type(tmpkey2, found->second));
+        const Object& kk = ret.first->first;
         if (ret.second)
         {
             src_kv->erase(found);
             if (tmpkey2 == src_key)
             {
-                const_cast<Object&>(kk) = found.key();
+//                const_cast<Object&>(kk) = found.key();
+                const_cast<Object&>(kk) = found->first;
             }
             else
             {
@@ -625,7 +645,8 @@ namespace mmkv
         {
             if (!nx)
             {
-                ret.first.value(found.value());
+//                ret.first.value(found.value());
+                ret.first->second = found->second;
                 src_kv->erase(found);
                 return 1;
             }
@@ -689,8 +710,8 @@ namespace mmkv
         {
             if (it.isfilled())
             {
-                DestroyObjectContent(it.key());
-                GenericDelValue(it.value());
+                DestroyObjectContent(it->first);
+                GenericDelValue(it->second);
             }
             it++;
         }
@@ -703,7 +724,7 @@ namespace mmkv
         m_segment.ReCreate(true);
         m_ttlset = NULL;
         m_ttlmap = NULL;
-        ReOpen();
+        ReOpen(true);
         return 0;
     }
 
@@ -762,12 +783,13 @@ namespace mmkv
     }
     int MMKVImpl::EnsureWritableSpace(size_t space_size)
     {
-        if(m_segment.EnsureWritableSpace(space_size) > 0)
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        if (m_segment.EnsureWritableSpace(space_size) > 0)
         {
             m_kvs.clear();
             m_ttlset = NULL;
             m_ttlmap = NULL;
-            ReOpen();
+            ReOpen(false);
             return 1;
         }
         return 0;

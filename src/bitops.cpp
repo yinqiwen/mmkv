@@ -213,7 +213,8 @@ namespace mmkv
         {
             return 0;
         }
-        const Object& value_data = found.value();
+//        const Object& value_data = found.value();
+        Object& value_data = found->second;
         if (value_data.type != V_TYPE_STRING)
         {
             return ERR_INVALID_TYPE;
@@ -494,7 +495,8 @@ namespace mmkv
              * If the user is looking for the first set bit, return -1. */
             return bit ? -1 : 0;
         }
-        const Object& value_data = found.value();
+//        const Object& value_data = found.value();
+        Object& value_data = found->second;
         if (value_data.type != V_TYPE_STRING)
         {
             return ERR_INVALID_TYPE;
@@ -578,7 +580,8 @@ namespace mmkv
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-        const Object& value_data = found.value();
+//        const Object& value_data = found.value();
+        Object& value_data = found->second;
         if (value_data.type != V_TYPE_STRING)
         {
             return ERR_INVALID_TYPE;
@@ -634,8 +637,10 @@ namespace mmkv
 
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         std::pair<MMKVTable::iterator, bool> ret = kv->insert(MMKVTable::value_type(key, Object()));
-        const Object& kk = ret.first.key();
-        Object& value_data = const_cast<Object&>(ret.first.value());
+//        const Object& kk = ret.first.key();
+//        Object& value_data = const_cast<Object&>(ret.first.value());
+                const Object& kk = ret.first->first;
+                Object& value_data = ret.first->second;
         if (!ret.second)
         {
             if (value_data.type != V_TYPE_STRING)

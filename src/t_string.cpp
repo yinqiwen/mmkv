@@ -38,7 +38,8 @@ namespace mmkv
     {
         Object tmpkey(key);
         std::pair<MMKVTable::iterator, bool> ret = table->insert(MMKVTable::value_type(tmpkey, Object()));
-        Object& value_data = const_cast<Object&>(ret.first.value());
+//        Object& value_data = const_cast<Object&>(ret.first.value());
+        Object& value_data = const_cast<Object&>(ret.first->second);
         if (ret.second)
         {
             m_segment.AssignObjectValue(value_data, create_base_value, false);
@@ -69,8 +70,8 @@ namespace mmkv
             ttl += get_current_micros();
         }
         std::pair<MMKVTable::iterator, bool> ret = table->insert(MMKVTable::value_type(tmpkey, Object()));
-        const Object& kk = ret.first.key();
-        Object& value_data = const_cast<Object&>(ret.first.value());
+        const Object& kk = ret.first->first;
+        Object& value_data = ret.first->second;
         if (!ret.second)
         {
             if (nx_xx == 0)  // only set key when key not exist
@@ -117,8 +118,6 @@ namespace mmkv
         return GenericSet(kv, db, key, value, ex, px, nx_xx);
     }
 
-
-
     int MMKVImpl::GenericGet(MMKVTable* table, DBID db, const Data& key, std::string& value)
     {
         Object tmpkey(key);
@@ -127,7 +126,7 @@ namespace mmkv
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-        Object& value_data = const_cast<Object&>(found.value());
+        Object& value_data = found->second;
         if (value_data.type != V_TYPE_STRING)
         {
             return ERR_INVALID_TYPE;
@@ -306,8 +305,10 @@ namespace mmkv
         Object tmpkey(key);
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         std::pair<MMKVTable::iterator, bool> ret = kv->insert(MMKVTable::value_type(tmpkey, Object()));
-        const Object& kk = ret.first.key();
-        Object& value_data = const_cast<Object&>(ret.first.value());
+//        const Object& kk = ret.first.key();
+//        Object& value_data = const_cast<Object&>(ret.first.value());
+        const Object& kk = ret.first->first;
+        Object& value_data = const_cast<Object&>(ret.first->second);
         if (!ret.second)
         {
             if (value_data.type != V_TYPE_STRING)
@@ -348,8 +349,8 @@ namespace mmkv
         Object tmpkey(key);
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         std::pair<MMKVTable::iterator, bool> ret = kv->insert(MMKVTable::value_type(tmpkey, Object()));
-        const Object& kk = ret.first.key();
-        Object& value_data = const_cast<Object&>(ret.first.value());
+        const Object& kk = ret.first->first;
+        Object& value_data = ret.first->second;
         if (!ret.second)
         {
             if (value_data.type != V_TYPE_STRING)
@@ -486,8 +487,8 @@ namespace mmkv
         Object tmpkey(key);
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         std::pair<MMKVTable::iterator, bool> ret = kv->insert(MMKVTable::value_type(tmpkey, Object()));
-        const Object& kk = ret.first.key();
-        Object& value_data = const_cast<Object&>(ret.first.value());
+        const Object& kk = ret.first->first;
+        Object& value_data = ret.first->second;
         std::string strvalue;
         if (!ret.second)
         {

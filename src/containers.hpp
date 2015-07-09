@@ -32,6 +32,7 @@
 
 #include "types.hpp"
 #include <sparsehash/sparse_hash_map>
+#include <sparsehash/dense_hash_map>
 //#include <sparsehash/sparse_hash_set>
 #include <string.h>
 #include <new>
@@ -68,6 +69,7 @@ namespace mmkv
 
     //typedef mmkv::btree::btree_map<MMKeyPtr, MMValuePtr, MMKeyPtrLess, MMKVAllocator> MMKVTable;
     typedef khmap_t<Object, Object, ObjectHash, ObjectEqual, StringMapAllocator> MMKVTable;
+    //typedef mmkv_google::sparse_hash_map<Object, Object, ObjectHash, ObjectEqual, StringMapAllocator> MMKVTable;
     typedef Allocator<TTLValue> TTLValueAllocator;
     typedef mmkv::btree::btree_set<TTLValue, std::less<TTLValue>, TTLValueAllocator> TTLValueSet;
 

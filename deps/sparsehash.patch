@@ -1,6 +1,61 @@
-diff -Nur sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-2.0.2-mod/src/sparsehash/internal/densehashtable.h
+diff -rupN sparsehash-2.0.2/configure sparsehash-2.0.2-mod/configure
+--- sparsehash-2.0.2/configure	2012-02-23 05:09:16.000000000 +0800
++++ sparsehash-2.0.2-mod/configure	2015-06-11 16:25:56.000000000 +0800
+@@ -5789,9 +5789,9 @@ else
+ fi
+ 
+    if test -n "$google_namespace"; then
+-     ac_google_namespace="::$google_namespace"
+-     ac_google_start_namespace="namespace $google_namespace {"
+-     ac_google_end_namespace="}"
++     ac_google_namespace="mmkv::$google_namespace"
++     ac_google_start_namespace="namespace mmkv{ namespace $google_namespace {"
++     ac_google_end_namespace="}}"
+    else
+      ac_google_namespace=""
+      ac_google_start_namespace=""
+diff -rupN sparsehash-2.0.2/src/sparsehash/dense_hash_map sparsehash-2.0.2-mod/src/sparsehash/dense_hash_map
+--- sparsehash-2.0.2/src/sparsehash/dense_hash_map	2012-02-23 04:49:42.000000000 +0800
++++ sparsehash-2.0.2-mod/src/sparsehash/dense_hash_map	2015-07-09 15:45:24.000000000 +0800
+@@ -93,8 +93,8 @@
+ // See /usr/(local/)?doc/sparsehash-*/dense_hash_map.html
+ // for information about how to use this class.
+ 
+-#ifndef _DENSE_HASH_MAP_H_
+-#define _DENSE_HASH_MAP_H_
++#ifndef MMKV_DENSE_HASH_MAP_H_
++#define MMKV_DENSE_HASH_MAP_H_
+ 
+ #include <sparsehash/internal/sparseconfig.h>
+ #include <algorithm>                        // needed by stl_alloc
+diff -rupN sparsehash-2.0.2/src/sparsehash/dense_hash_set sparsehash-2.0.2-mod/src/sparsehash/dense_hash_set
+--- sparsehash-2.0.2/src/sparsehash/dense_hash_set	2012-02-23 04:49:42.000000000 +0800
++++ sparsehash-2.0.2-mod/src/sparsehash/dense_hash_set	2015-07-09 15:45:36.000000000 +0800
+@@ -97,8 +97,8 @@
+ // See /usr/(local/)?doc/sparsehash-*/dense_hash_set.html
+ // for information about how to use this class.
+ 
+-#ifndef _DENSE_HASH_SET_H_
+-#define _DENSE_HASH_SET_H_
++#ifndef MMKV_DENSE_HASH_SET_H_
++#define MMKV_DENSE_HASH_SET_H_
+ 
+ #include <sparsehash/internal/sparseconfig.h>
+ #include <algorithm>                        // needed by stl_alloc
+diff -rupN sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-2.0.2-mod/src/sparsehash/internal/densehashtable.h
 --- sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h	2012-02-23 04:49:42.000000000 +0800
-+++ sparsehash-2.0.2-mod/src/sparsehash/internal/densehashtable.h	2015-06-11 16:14:32.000000000 +0800
++++ sparsehash-2.0.2-mod/src/sparsehash/internal/densehashtable.h	2015-07-09 15:44:38.000000000 +0800
+@@ -86,8 +86,8 @@
+ //    probes/successful lookup    1.06  1.5   1.75  2.5   3.0   5.5   50.5
+ //    probes/unsuccessful lookup  1.12  2.5   3.6   8.5   13.0  50.0  5000.0
+ 
+-#ifndef _DENSEHASHTABLE_H_
+-#define _DENSEHASHTABLE_H_
++#ifndef MMKV_DENSEHASHTABLE_H_
++#define MMKV_DENSEHASHTABLE_H_
+ 
+ #include <sparsehash/internal/sparseconfig.h>
+ #include <assert.h>
 @@ -101,6 +101,7 @@
  #include <sparsehash/internal/libc_allocator_with_realloc.h>
  #include <sparsehash/type_traits.h>
@@ -9,7 +64,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-2
  
  _START_GOOGLE_NAMESPACE_
  
-@@ -160,7 +161,8 @@
+@@ -160,7 +161,8 @@ struct dense_hashtable_iterator {
    typedef typename value_alloc_type::difference_type difference_type;
    typedef typename value_alloc_type::size_type size_type;
    typedef typename value_alloc_type::reference reference;
@@ -19,7 +74,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-2
  
    // "Real" constructor and default constructor
    dense_hashtable_iterator(const dense_hashtable<V,K,HF,ExK,SetK,EqK,A> *h,
-@@ -213,7 +215,8 @@
+@@ -213,7 +215,8 @@ struct dense_hashtable_const_iterator {
    typedef typename value_alloc_type::difference_type difference_type;
    typedef typename value_alloc_type::size_type size_type;
    typedef typename value_alloc_type::const_reference reference;
@@ -29,7 +84,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-2
  
    // "Real" constructor and default constructor
    dense_hashtable_const_iterator(
-@@ -272,8 +275,11 @@
+@@ -272,8 +275,11 @@ class dense_hashtable {
    typedef typename value_alloc_type::difference_type difference_type;
    typedef typename value_alloc_type::reference reference;
    typedef typename value_alloc_type::const_reference const_reference;
@@ -43,7 +98,45 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-2
    typedef dense_hashtable_iterator<Value, Key, HashFcn,
                                     ExtractKey, SetKey, EqualKey, Alloc>
    iterator;
-@@ -353,7 +359,7 @@
+@@ -308,19 +314,19 @@ class dense_hashtable {
+   static const size_type HT_DEFAULT_STARTING_BUCKETS = 32;
+ 
+   // ITERATOR FUNCTIONS
+-  iterator begin()             { return iterator(this, table,
+-                                                 table + num_buckets, true); }
+-  iterator end()               { return iterator(this, table + num_buckets,
+-                                                 table + num_buckets, true); }
+-  const_iterator begin() const { return const_iterator(this, table,
+-                                                       table+num_buckets,true);}
+-  const_iterator end() const   { return const_iterator(this, table + num_buckets,
+-                                                       table+num_buckets,true);}
++  iterator begin()             { return iterator(this, table.get(),
++                                                 table.get() + num_buckets, true); }
++  iterator end()               { return iterator(this, table.get() + num_buckets,
++                                                 table.get() + num_buckets, true); }
++  const_iterator begin() const { return const_iterator(this, table.get(),
++                                                       table.get()+num_buckets,true);}
++  const_iterator end() const   { return const_iterator(this, table.get() + num_buckets,
++                                                       table.get()+num_buckets,true);}
+ 
+   // These come from tr1 unordered_map.  They iterate over 'bucket' n.
+   // We'll just consider bucket n to be the n-th element of the table.
+   local_iterator begin(size_type i) {
+-    return local_iterator(this, table + i, table + i+1, false);
++    return local_iterator(this, table.get() + i, table.get() + i+1, false);
+   }
+   local_iterator end(size_type i) {
+     local_iterator it = begin(i);
+@@ -329,7 +335,7 @@ class dense_hashtable {
+     return it;
+   }
+   const_local_iterator begin(size_type i) const {
+-    return const_local_iterator(this, table + i, table + i+1, false);
++    return const_local_iterator(this, table.get() + i, table.get() + i+1, false);
+   }
+   const_local_iterator end(size_type i) const {
+     const_local_iterator it = begin(i);
+@@ -353,7 +359,7 @@ class dense_hashtable {
    // const components (they're probably pair<const X, Y>).  We use
    // explicit destructor invocation and placement new to get around
    // this.  Arg.
@@ -52,7 +145,16 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-2
      dst->~value_type();   // delete the old value, if any
      new(dst) value_type(src);
    }
-@@ -767,7 +773,7 @@
+@@ -507,7 +513,7 @@ class dense_hashtable {
+     // num_buckets was set in constructor even though table was NULL
+     table = val_info.allocate(num_buckets);
+     assert(table);
+-    fill_range_with_empty(table, table + num_buckets);
++    fill_range_with_empty(table.get(), table.get() + num_buckets);
+   }
+   // TODO(user): return a key_type rather than a value_type
+   value_type empty_key() const {
+@@ -767,7 +773,7 @@ class dense_hashtable {
  
   private:
    void clear_to_size(size_type new_num_buckets) {
@@ -61,7 +163,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-2
        table = val_info.allocate(new_num_buckets);
      } else {
        destroy_buckets(0, num_buckets);
-@@ -780,7 +786,7 @@
+@@ -780,7 +786,7 @@ class dense_hashtable {
        }
      }
      assert(table);
@@ -70,7 +172,54 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-2
      num_elements = 0;
      num_deleted = 0;
      num_buckets = new_num_buckets;          // our new size
-@@ -1281,7 +1287,7 @@
+@@ -855,7 +861,7 @@ class dense_hashtable {
+     if ( pos.first == ILLEGAL_BUCKET )     // alas, not there
+       return end();
+     else
+-      return iterator(this, table + pos.first, table + num_buckets, false);
++      return iterator(this, table.get() + pos.first, table.get() + num_buckets, false);
+   }
+ 
+   const_iterator find(const key_type& key) const {
+@@ -864,7 +870,7 @@ class dense_hashtable {
+     if ( pos.first == ILLEGAL_BUCKET )     // alas, not there
+       return end();
+     else
+-      return const_iterator(this, table + pos.first, table+num_buckets, false);
++      return const_iterator(this, table.get() + pos.first, table.get()+num_buckets, false);
+   }
+ 
+   // This is a tr1 method: the bucket a given key is in, or what bucket
+@@ -911,7 +917,7 @@ class dense_hashtable {
+     }
+     if ( test_deleted(pos) ) {      // just replace if it's been del.
+       // shrug: shouldn't need to be const.
+-      const_iterator delpos(this, table + pos, table + num_buckets, false);
++      const_iterator delpos(this, table.get() + pos, table.get() + num_buckets, false);
+       clear_deleted(delpos);
+       assert( num_deleted > 0);
+       --num_deleted;                // used to be, now it isn't
+@@ -919,7 +925,7 @@ class dense_hashtable {
+       ++num_elements;               // replacing an empty bucket
+     }
+     set_value(&table[pos], obj);
+-    return iterator(this, table + pos, table + num_buckets, false);
++    return iterator(this, table.get() + pos, table.get() + num_buckets, false);
+   }
+ 
+   // If you know *this is big enough to hold obj, use this routine
+@@ -932,8 +938,8 @@ class dense_hashtable {
+            && "Inserting the deleted key");
+     const std::pair<size_type,size_type> pos = find_position(get_key(obj));
+     if ( pos.first != ILLEGAL_BUCKET) {      // object was already there
+-      return std::pair<iterator,bool>(iterator(this, table + pos.first,
+-                                          table + num_buckets, false),
++      return std::pair<iterator,bool>(iterator(this, table.get() + pos.first,
++                                          table.get() + num_buckets, false),
+                                  false);          // false: we didn't insert
+     } else {                                 // pos.second says where to put it
+       return std::pair<iterator,bool>(insert_at(obj, pos.second), true);
+@@ -1281,7 +1287,7 @@ class dense_hashtable {
    size_type num_elements;
    size_type num_buckets;
    ValInfo val_info;       // holds emptyval, and also the allocator
@@ -79,10 +228,49 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-2
  };
  
  
-diff -Nur sparsehash-2.0.2/src/sparsehash/internal/sparsehashtable.h sparsehash-2.0.2-mod/src/sparsehash/internal/sparsehashtable.h
+diff -rupN sparsehash-2.0.2/src/sparsehash/internal/hashtable-common.h sparsehash-2.0.2-mod/src/sparsehash/internal/hashtable-common.h
+--- sparsehash-2.0.2/src/sparsehash/internal/hashtable-common.h	2012-02-23 04:49:42.000000000 +0800
++++ sparsehash-2.0.2-mod/src/sparsehash/internal/hashtable-common.h	2015-07-09 15:44:56.000000000 +0800
+@@ -37,8 +37,8 @@
+ // Other functions and classes provide common code for serializing
+ // and deserializing hashtables to a stream (such as a FILE*).
+ 
+-#ifndef UTIL_GTL_HASHTABLE_COMMON_H_
+-#define UTIL_GTL_HASHTABLE_COMMON_H_
++#ifndef MMKV_UTIL_GTL_HASHTABLE_COMMON_H_
++#define MMKV_UTIL_GTL_HASHTABLE_COMMON_H_
+ 
+ #include <sparsehash/internal/sparseconfig.h>
+ #include <assert.h>
+diff -rupN sparsehash-2.0.2/src/sparsehash/internal/libc_allocator_with_realloc.h sparsehash-2.0.2-mod/src/sparsehash/internal/libc_allocator_with_realloc.h
+--- sparsehash-2.0.2/src/sparsehash/internal/libc_allocator_with_realloc.h	2012-02-23 04:49:42.000000000 +0800
++++ sparsehash-2.0.2-mod/src/sparsehash/internal/libc_allocator_with_realloc.h	2015-07-09 15:45:04.000000000 +0800
+@@ -29,8 +29,8 @@
+ 
+ // ---
+ 
+-#ifndef UTIL_GTL_LIBC_ALLOCATOR_WITH_REALLOC_H_
+-#define UTIL_GTL_LIBC_ALLOCATOR_WITH_REALLOC_H_
++#ifndef MMKV_UTIL_GTL_LIBC_ALLOCATOR_WITH_REALLOC_H_
++#define MMKV_UTIL_GTL_LIBC_ALLOCATOR_WITH_REALLOC_H_
+ 
+ #include <sparsehash/internal/sparseconfig.h>
+ #include <stdlib.h>           // for malloc/realloc/free
+diff -rupN sparsehash-2.0.2/src/sparsehash/internal/sparsehashtable.h sparsehash-2.0.2-mod/src/sparsehash/internal/sparsehashtable.h
 --- sparsehash-2.0.2/src/sparsehash/internal/sparsehashtable.h	2012-02-23 04:49:42.000000000 +0800
-+++ sparsehash-2.0.2-mod/src/sparsehash/internal/sparsehashtable.h	2015-06-11 16:14:50.000000000 +0800
-@@ -173,7 +173,8 @@
++++ sparsehash-2.0.2-mod/src/sparsehash/internal/sparsehashtable.h	2015-07-09 15:45:16.000000000 +0800
+@@ -92,8 +92,8 @@
+ // The value type is required to be copy constructible and default
+ // constructible, but it need not be (and commonly isn't) assignable.
+ 
+-#ifndef _SPARSEHASHTABLE_H_
+-#define _SPARSEHASHTABLE_H_
++#ifndef MMKV_SPARSEHASHTABLE_H_
++#define MMKV_SPARSEHASHTABLE_H_
+ 
+ #include <sparsehash/internal/sparseconfig.h>
+ #include <assert.h>
+@@ -173,7 +173,8 @@ struct sparse_hashtable_iterator {
    typedef typename value_alloc_type::difference_type difference_type;
    typedef typename value_alloc_type::size_type size_type;
    typedef typename value_alloc_type::reference reference;
@@ -92,7 +280,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/internal/sparsehashtable.h sparsehash-
  
    // "Real" constructor and default constructor
    sparse_hashtable_iterator(const sparse_hashtable<V,K,HF,ExK,SetK,EqK,A> *h,
-@@ -225,7 +226,8 @@
+@@ -225,7 +226,8 @@ struct sparse_hashtable_const_iterator {
    typedef typename value_alloc_type::difference_type difference_type;
    typedef typename value_alloc_type::size_type size_type;
    typedef typename value_alloc_type::const_reference reference;
@@ -102,7 +290,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/internal/sparsehashtable.h sparsehash-
  
    // "Real" constructor and default constructor
    sparse_hashtable_const_iterator(const sparse_hashtable<V,K,HF,ExK,SetK,EqK,A> *h,
-@@ -279,7 +281,8 @@
+@@ -279,7 +281,8 @@ struct sparse_hashtable_destructive_iter
    typedef typename value_alloc_type::difference_type difference_type;
    typedef typename value_alloc_type::size_type size_type;
    typedef typename value_alloc_type::reference reference;
@@ -112,7 +300,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/internal/sparsehashtable.h sparsehash-
  
    // "Real" constructor and default constructor
    sparse_hashtable_destructive_iterator(const
-@@ -333,8 +336,10 @@
+@@ -333,8 +336,10 @@ class sparse_hashtable {
    typedef typename value_alloc_type::difference_type difference_type;
    typedef typename value_alloc_type::reference reference;
    typedef typename value_alloc_type::const_reference const_reference;
@@ -125,9 +313,48 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/internal/sparsehashtable.h sparsehash-
    typedef sparse_hashtable_iterator<Value, Key, HashFcn, ExtractKey,
                                      SetKey, EqualKey, Alloc>
    iterator;
-diff -Nur sparsehash-2.0.2/src/sparsehash/sparsetable sparsehash-2.0.2-mod/src/sparsehash/sparsetable
+diff -rupN sparsehash-2.0.2/src/sparsehash/sparse_hash_map sparsehash-2.0.2-mod/src/sparsehash/sparse_hash_map
+--- sparsehash-2.0.2/src/sparsehash/sparse_hash_map	2012-02-23 04:49:42.000000000 +0800
++++ sparsehash-2.0.2-mod/src/sparsehash/sparse_hash_map	2015-07-09 15:45:46.000000000 +0800
+@@ -81,8 +81,8 @@
+ // See /usr/(local/)?doc/sparsehash-*/sparse_hash_map.html
+ // for information about how to use this class.
+ 
+-#ifndef _SPARSE_HASH_MAP_H_
+-#define _SPARSE_HASH_MAP_H_
++#ifndef MMKV_SPARSE_HASH_MAP_H_
++#define MMKV_SPARSE_HASH_MAP_H_
+ 
+ #include <sparsehash/internal/sparseconfig.h>
+ #include <algorithm>                        // needed by stl_alloc
+diff -rupN sparsehash-2.0.2/src/sparsehash/sparse_hash_set sparsehash-2.0.2-mod/src/sparsehash/sparse_hash_set
+--- sparsehash-2.0.2/src/sparsehash/sparse_hash_set	2012-02-23 04:49:42.000000000 +0800
++++ sparsehash-2.0.2-mod/src/sparsehash/sparse_hash_set	2015-07-09 15:45:54.000000000 +0800
+@@ -85,8 +85,8 @@
+ // See /usr/(local/)?doc/sparsehash-*/sparse_hash_set.html
+ // for information about how to use this class.
+ 
+-#ifndef _SPARSE_HASH_SET_H_
+-#define _SPARSE_HASH_SET_H_
++#ifndef MMKV_SPARSE_HASH_SET_H_
++#define MMKV_SPARSE_HASH_SET_H_
+ 
+ #include <sparsehash/internal/sparseconfig.h>
+ #include <algorithm>                       // needed by stl_alloc
+diff -rupN sparsehash-2.0.2/src/sparsehash/sparsetable sparsehash-2.0.2-mod/src/sparsehash/sparsetable
 --- sparsehash-2.0.2/src/sparsehash/sparsetable	2012-02-23 04:49:42.000000000 +0800
-+++ sparsehash-2.0.2-mod/src/sparsehash/sparsetable	2015-06-11 16:14:18.000000000 +0800
++++ sparsehash-2.0.2-mod/src/sparsehash/sparsetable	2015-07-09 15:46:04.000000000 +0800
+@@ -221,8 +221,8 @@
+ // Note: this uses STL style for naming, rather than Google naming.
+ // That's because this is an STL-y container
+ 
+-#ifndef UTIL_GTL_SPARSETABLE_H_
+-#define UTIL_GTL_SPARSETABLE_H_
++#ifndef MMKV_UTIL_GTL_SPARSETABLE_H_
++#define MMKV_UTIL_GTL_SPARSETABLE_H_
+ 
+ #include <sparsehash/internal/sparseconfig.h>
+ #include <stdlib.h>             // for malloc/free
 @@ -245,6 +245,8 @@
  #include <sparsehash/type_traits.h>
  #include <sparsehash/internal/hashtable-common.h>
@@ -137,7 +364,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/sparsetable sparsehash-2.0.2-mod/src/s
  
  // A lot of work to get a type that's guaranteed to be 16 bits...
  #ifndef HAVE_U_INT16_T
-@@ -811,6 +813,7 @@
+@@ -811,6 +813,7 @@ class sparsegroup {
    typedef typename value_alloc_type::reference reference;
    typedef typename value_alloc_type::const_reference const_reference;
    typedef typename value_alloc_type::pointer pointer;
@@ -145,7 +372,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/sparsetable sparsehash-2.0.2-mod/src/s
    typedef typename value_alloc_type::const_pointer const_pointer;
  
    typedef table_iterator<sparsegroup<T, GROUP_SIZE, Alloc> > iterator;
-@@ -841,13 +844,13 @@
+@@ -841,13 +844,13 @@ class sparsegroup {
    const_reverse_iterator rend() const { return const_reverse_iterator(begin()); }
  
    // We'll have versions for our special non-empty iterator too
@@ -163,7 +390,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/sparsetable sparsehash-2.0.2-mod/src/s
    }
    reverse_nonempty_iterator nonempty_rbegin() {
      return reverse_nonempty_iterator(nonempty_end());
-@@ -893,11 +896,11 @@
+@@ -893,11 +896,11 @@ class sparsegroup {
    }
  
    void free_group() {
@@ -179,7 +406,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/sparsetable sparsehash-2.0.2-mod/src/s
      group = NULL;
    }
  
-@@ -992,7 +995,7 @@
+@@ -992,7 +995,7 @@ class sparsegroup {
    sparsegroup(const sparsegroup& x) : group(0), settings(x.settings) {
      if ( settings.num_buckets ) {
        group = allocate_group(x.settings.num_buckets);
@@ -188,7 +415,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/sparsetable sparsehash-2.0.2-mod/src/s
      }
      memcpy(bitmap, x.bitmap, sizeof(bitmap));
    }
-@@ -1007,7 +1010,7 @@
+@@ -1007,7 +1010,7 @@ class sparsegroup {
        free_group();
      } else {
        pointer p = allocate_group(x.settings.num_buckets);
@@ -197,7 +424,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/sparsetable sparsehash-2.0.2-mod/src/s
        free_group();
        group = p;
      }
-@@ -1084,11 +1087,12 @@
+@@ -1084,11 +1087,12 @@ class sparsegroup {
    // pretend that move(x, y) is equivalent to "x.~T(); new(x) T(y);"
    // which is pretty much correct, if a bit conservative.)
    void set_aux(size_type offset, base::true_type) {
@@ -212,7 +439,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/sparsetable sparsehash-2.0.2-mod/src/s
    }
  
    // Create space at group[offset], without special assumptions about value_type
-@@ -1096,8 +1100,8 @@
+@@ -1096,8 +1100,8 @@ class sparsegroup {
    void set_aux(size_type offset, base::false_type) {
      // This is valid because 0 <= offset <= num_buckets
      pointer p = allocate_group(settings.num_buckets + 1);
@@ -223,7 +450,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/sparsetable sparsehash-2.0.2-mod/src/s
                              p + offset + 1);
      free_group();
      group = p;
-@@ -1154,8 +1158,9 @@
+@@ -1154,8 +1158,9 @@ class sparsegroup {
      // at lesat with gcc4.1 -O2 / glibc 2.3.6.
      assert(settings.num_buckets > 0);
      for (size_type i = offset; i < settings.num_buckets-1; ++i)
@@ -235,7 +462,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/sparsetable sparsehash-2.0.2-mod/src/s
    }
  
    // Shrink the array, without any special assumptions about value_type and
-@@ -1163,8 +1168,8 @@
+@@ -1163,8 +1168,8 @@ class sparsegroup {
    void erase_aux(size_type offset, base::false_type) {
      // This is valid because 0 <= offset < num_buckets. Note the inequality.
      pointer p = allocate_group(settings.num_buckets - 1);
@@ -246,7 +473,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/sparsetable sparsehash-2.0.2-mod/src/s
                              p + offset);
      free_group();
      group = p;
-@@ -1338,7 +1343,7 @@
+@@ -1338,7 +1343,7 @@ class sparsegroup {
    };
  
    // The actual data
@@ -255,7 +482,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/sparsetable sparsehash-2.0.2-mod/src/s
    Settings settings;                          // allocator and num_buckets
    unsigned char bitmap[(GROUP_SIZE-1)/8 + 1]; // fancy math is so we round up
  };
-@@ -1381,11 +1386,11 @@
+@@ -1381,11 +1386,11 @@ class sparsetable {
  
    // These are our special iterators, that go over non-empty buckets in a
    // table.  These aren't const only because you can change non-empty bcks.
@@ -269,7 +496,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/sparsetable sparsehash-2.0.2-mod/src/s
                                                           GROUP_SIZE,
                                                           value_alloc_type>,
                                          vector_alloc> >
-@@ -1393,7 +1398,7 @@
+@@ -1393,7 +1398,7 @@ class sparsetable {
    typedef std::reverse_iterator<nonempty_iterator> reverse_nonempty_iterator;
    typedef std::reverse_iterator<const_nonempty_iterator> const_reverse_nonempty_iterator;
    // Another special iterator: it frees memory as it iterates (used to resize)
@@ -278,7 +505,7 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/sparsetable sparsehash-2.0.2-mod/src/s
                                                                 GROUP_SIZE,
                                                                 value_alloc_type>,
                                                vector_alloc> >
-@@ -1442,7 +1447,8 @@
+@@ -1442,7 +1447,8 @@ class sparsetable {
    }
  
    typedef sparsegroup<value_type, GROUP_SIZE, allocator_type> group_type;
@@ -288,3 +515,31 @@ diff -Nur sparsehash-2.0.2/src/sparsehash/sparsetable sparsehash-2.0.2-mod/src/s
  
    typedef typename group_vector_type::reference GroupsReference;
    typedef typename group_vector_type::const_reference GroupsConstReference;
+diff -rupN sparsehash-2.0.2/src/sparsehash/template_util.h sparsehash-2.0.2-mod/src/sparsehash/template_util.h
+--- sparsehash-2.0.2/src/sparsehash/template_util.h	2012-02-23 04:49:42.000000000 +0800
++++ sparsehash-2.0.2-mod/src/sparsehash/template_util.h	2015-07-09 15:46:14.000000000 +0800
+@@ -46,8 +46,8 @@
+ // Both of these outcomes means that we may be able to directly replace
+ // some of these with boost equivalents.
+ //
+-#ifndef BASE_TEMPLATE_UTIL_H_
+-#define BASE_TEMPLATE_UTIL_H_
++#ifndef MMKV_BASE_TEMPLATE_UTIL_H_
++#define MMKV_BASE_TEMPLATE_UTIL_H_
+ 
+ #include <sparsehash/internal/sparseconfig.h>
+ _START_GOOGLE_NAMESPACE_
+diff -rupN sparsehash-2.0.2/src/sparsehash/type_traits.h sparsehash-2.0.2-mod/src/sparsehash/type_traits.h
+--- sparsehash-2.0.2/src/sparsehash/type_traits.h	2012-02-23 04:49:42.000000000 +0800
++++ sparsehash-2.0.2-mod/src/sparsehash/type_traits.h	2015-07-09 15:46:22.000000000 +0800
+@@ -54,8 +54,8 @@
+ //   is_convertible
+ // We can add more type traits as required.
+ 
+-#ifndef BASE_TYPE_TRAITS_H_
+-#define BASE_TYPE_TRAITS_H_
++#ifndef MMKV_BASE_TYPE_TRAITS_H_
++#define MMKV_BASE_TYPE_TRAITS_H_
+ 
+ #include <sparsehash/internal/sparseconfig.h>
+ #include <utility>                  // For pair

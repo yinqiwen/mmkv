@@ -49,8 +49,8 @@ namespace mmkv
             StringHashTable::iterator found = hash->find(fields[i]);
             if (found != hash->end())
             {
-                DestroyObjectContent(found.key());
-                DestroyObjectContent(found.value());
+                DestroyObjectContent(found->first);
+                DestroyObjectContent(found->second);
                 hash->erase(found);
                 removed++;
             }
@@ -86,7 +86,7 @@ namespace mmkv
         StringHashTable::iterator found = hash->find(field);
         if (found != hash->end())
         {
-            found.value().ToString(val);
+            found->second.ToString(val);
             return 0;
         }
         else
@@ -111,8 +111,8 @@ namespace mmkv
             if (it.isfilled())
             {
                 std::string field, value;
-                it.key().ToString(field);
-                it.value().ToString(value);
+                it->first.ToString(field);
+                it->second.ToString(value);
                 vals.push_back(field);
                 vals.push_back(value);
             }
@@ -137,13 +137,13 @@ namespace mmkv
         std::pair<StringHashTable::iterator, bool> ret = hash->insert(StringHashTable::value_type(field, Object()));
         if (ret.second)
         {
-            m_segment.AssignObjectValue(const_cast<Object&>(ret.first.key()), field, false);
-            const_cast<Object&>(ret.first.value()).SetInteger(increment);
+            m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), field, false);
+            ret.first->second.SetInteger(increment);
             new_val = increment;
         }
         else
         {
-            Object& data = const_cast<Object&>(ret.first.value());
+            Object& data = ret.first->second;
             if (data.IsInteger())
             {
                 new_val = data.IntegerValue() + increment;
@@ -174,23 +174,23 @@ namespace mmkv
                 StringHashTable::value_type(Object(field), Object()));
         if (ret.second)
         {
-            m_segment.AssignObjectValue(const_cast<Object&>(ret.first.key()), field, false);
+            m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), field, false);
             if (is_integer(increment))
             {
-                const_cast<Object&>(ret.first.value()).SetInteger((int64_t) increment);
+                ret.first->second.SetInteger((int64_t) increment);
             }
             else
             {
                 char buf[256];
                 int dlen = double2string(buf, sizeof(buf), increment, true);
                 Data tmp(buf, dlen);
-                m_segment.AssignObjectValue(const_cast<Object&>(ret.first.value()), tmp, false);
+                m_segment.AssignObjectValue(ret.first->second, tmp, false);
             }
             new_val = increment;
         }
         else
         {
-            Object& data = const_cast<Object&>(ret.first.value());
+            Object& data = ret.first->second;
             double dv = 0;
             if (data.IsInteger())
             {
@@ -234,7 +234,7 @@ namespace mmkv
             if (it.isfilled())
             {
                 std::string field;
-                it.key().ToString(field);
+                it->first.ToString(field);
                 fields.push_back(field);
             }
             it++;
@@ -271,7 +271,7 @@ namespace mmkv
             std::string val;
             if (found != hash->end())
             {
-                found.value().ToString(val);
+                found->second.ToString(val);
             }
             vals.push_back(val);
         }
@@ -298,13 +298,13 @@ namespace mmkv
             std::pair<StringHashTable::iterator, bool> ret = hash->insert(StringHashTable::value_type(tmpk, tmpv));
             if (ret.second)
             {
-                m_segment.AssignObjectValue(const_cast<Object&>(ret.first.key()), field_vals[i].first, false);
+                m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), field_vals[i].first, false);
             }
             else
             {
-                DestroyObjectContent(ret.first.value());
+                DestroyObjectContent(ret.first->second);
             }
-            m_segment.AssignObjectValue(const_cast<Object&>(ret.first.value()), field_vals[i].second, false);
+            m_segment.AssignObjectValue(ret.first->second, field_vals[i].second, false);
         }
         return 0;
     }
@@ -331,7 +331,7 @@ namespace mmkv
         std::pair<StringHashTable::iterator, bool> ret = hash->insert(StringHashTable::value_type(tmpk, tmpv));
         if (ret.second)
         {
-            m_segment.AssignObjectValue(const_cast<Object&>(ret.first.key()), field, false);
+            m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), field, false);
         }
         else
         {
@@ -339,9 +339,9 @@ namespace mmkv
             {
                 return ERR_ENTRY_EXISTED;
             }
-            DestroyObjectContent(ret.first.value());
+            DestroyObjectContent(ret.first->second);
         }
-        m_segment.AssignObjectValue(const_cast<Object&>(ret.first.value()), val, false);
+        m_segment.AssignObjectValue(ret.first->second, val, false);
         return ret.second ? 1 : 0;
     }
     int MMKVImpl::HStrlen(DBID db, const Data& key, const Data& field)
@@ -360,7 +360,7 @@ namespace mmkv
         StringHashTable::iterator found = hash->find(field);
         if (found != hash->end())
         {
-            return found.value().len;
+            return found->second.len;
         }
         return 0;
     }
@@ -380,7 +380,7 @@ namespace mmkv
             if (it.isfilled())
             {
                 std::string value;
-                it.value().ToString(value);
+                it->second.ToString(value);
                 vals.push_back(value);
             }
             it++;

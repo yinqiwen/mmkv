@@ -224,17 +224,12 @@ struct khasheq_t
 template<class T1, class T2>
 struct kpair_t
 {
-        T1 first;
-        T2 second;
-        kpair_t()
-        {
-        }
-        ;
-        kpair_t(const T1 &a, const T2 &b) :
+        const T1& first;
+        T2& second;
+        kpair_t(const T1 &a, T2 &b) :
                 first(a), second(b)
         {
         }
-        ;
 };
 
 /*
@@ -255,7 +250,7 @@ const double __ac_HASH_UPPER = 0.77;
 typedef uint32_t __ac_flag_t;
 const int __ac_FLAG_SHIFT = 4;
 const int __ac_FLAG_MASK = 0xful;
-const __ac_flag_t   __ac_FLAG_DEFAULT = 0xaaaaaaaaul;
+const __ac_flag_t    __ac_FLAG_DEFAULT = 0xaaaaaaaaul;
 
 #define __ac_isempty(flag, i) ((flag[i>>__ac_FLAG_SHIFT]>>((i&__ac_FLAG_MASK)<<1))&2)
 #define __ac_isdel(flag, i) ((flag[i>>__ac_FLAG_SHIFT]>>((i&__ac_FLAG_MASK)<<1))&1)
@@ -414,10 +409,9 @@ class __ac_hash_base_iterator
 template<class keytype_t, class valtype_t>
 class __ac_hash_val_iterator: public __ac_hash_base_iterator<keytype_t>
 {
-    public:
-        typedef std::pair<keytype_t, valtype_t> kvpair_t;
     protected:
         valtype_t *vals;
+        char pair_buf[sizeof(kpair_t<keytype_t, valtype_t>)];
     public:
         __ac_hash_val_iterator()
         {
@@ -431,12 +425,11 @@ class __ac_hash_val_iterator: public __ac_hash_base_iterator<keytype_t>
         {
             return vals[this->i];
         } // Values can be changed here.
-//	inline kvpair_t* operator -> () {
-//	    //return &vals[this->i];
-//	    kvpair.first = __ac_hash_base_iterator<keytype_t>::key();
-//	    kvpair.second = (vals[this->i]);
-//	    return &kvpair;
-//	}
+        inline kpair_t<keytype_t, valtype_t>* operator ->()
+        {
+            //return &vals[this->i];
+            return  ::new (pair_buf) kpair_t<keytype_t, valtype_t>(__ac_hash_base_iterator<keytype_t>::key(), vals[this->i]);
+        }
         inline const valtype_t &value() const
         {
             return vals[this->i];
@@ -495,7 +488,8 @@ class __ac_hash_base_class
                 {
                     ::new ((void*) (new_key + k)) keytype_t;
                 }
-            }else
+            }
+            else
             {
 
             }
@@ -513,7 +507,8 @@ class __ac_hash_base_class
             //keys = (keytype_t*)realloc(keys, *new_capacity * sizeof(keytype_t));
             //keys = (keytype_t*)alloc.realloc(keys.get(), *new_capacity * sizeof(keytype_t));
             keys = realloc_keys(*new_capacity);
-            if (keys == 0) {   return false;}// insufficient memory?
+            if (keys == 0)
+            {   return false;}            // insufficient memory?
             //*new_flags = (__ac_flag_t*)malloc(((*new_capacity>>__ac_FLAG_SHIFT) + 1) * sizeof(__ac_flag_t));
             *new_flags = (__ac_flag_t*)(alloc.allocate(((*new_capacity>>__ac_FLAG_SHIFT) + 1) * sizeof(__ac_flag_t)));
             if (*new_flags == 0)
@@ -647,11 +642,11 @@ class khset_t: public __ac_hash_base_class<keytype_t, hashf_t, hasheq_t, alloc_t
         {
             if (other->flags.get())
             {
-                this->alloc.deallocate_ptr((char*)other->flags.get());
+                this->alloc.deallocate_ptr((char*) other->flags.get());
             }
             if (other->keys.get())
             {
-                this->alloc.deallocate_ptr((char*)other->keys.get());
+                this->alloc.deallocate_ptr((char*) other->keys.get());
             }
             memcpy(other, this, sizeof(selftype_t));
             other->flags = (__ac_flag_t *) this->alloc.allocate(
@@ -760,7 +755,7 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
         ~khmap_t(void)
         {
             //::free(vals);
-            if(vals.get() != NULL)
+            if (vals.get() != NULL)
             {
                 alloc.deallocate_ptr((char*) vals.get());
                 vals = 0;
@@ -776,15 +771,15 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
         {
             if (h2->flags.get())
             {
-                this->alloc.deallocate_ptr((char*)h2->flags.get());
+                this->alloc.deallocate_ptr((char*) h2->flags.get());
             }
             if (h2->keys.get())
             {
-                this->alloc.deallocate_ptr((char*)h2->keys.get());
+                this->alloc.deallocate_ptr((char*) h2->keys.get());
             }
             if (h2->vals.get())
             {
-                this->alloc.deallocate_ptr((char*)h2->vals.get());
+                this->alloc.deallocate_ptr((char*) h2->vals.get());
             }
             memcpy(h2, this, sizeof(selftype_t));
             h2->flags = (__ac_flag_t *) this->alloc.allocate(
@@ -814,7 +809,7 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
             valtype_t* new_val = (valtype_t*) alloc.allocate(sizeof(valtype_t) * new_capacity);
             if (NULL != new_val)
             {
-                khashint_t min_size = this->n_capacity < new_capacity?this->n_capacity:new_capacity;
+                khashint_t min_size = this->n_capacity < new_capacity ? this->n_capacity : new_capacity;
                 for (khashint_t k = 0; k < min_size; k++)
                 {
                     new_val[k] = vals[k];
@@ -832,7 +827,8 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
         inline bool resize(khashint_t new_capacity)
         {
             __ac_flag_t *new_flags;
-            if (!super_super_type::resize_aux1(&new_capacity, &new_flags)){
+            if (!super_super_type::resize_aux1(&new_capacity, &new_flags))
+            {
                 return false;
             }
 //		for(int k = 0; k < this->n_capacity; k++)
@@ -916,7 +912,7 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
                 return iterator(i, keys_ptr, flags_ptr, vals.get());
             }
             else
-                return this->end();
+            return this->end();
         }
 
         inline inspair_t insert(const keytype_t &key, const valtype_t &val)
@@ -927,7 +923,7 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
             khashint_t i;
             int ret = this->direct_insert_aux(key, this->n_capacity, keys_ptr, flags_ptr, &i);
             if (ret == 0)
-                return inspair_t(iterator(i, keys_ptr, flags_ptr, vals.get()), false);
+            return inspair_t(iterator(i, keys_ptr, flags_ptr, vals.get()), false);
             valtype_t* vals_ptr = vals.get();
             vals_ptr[i] = const_cast<valtype_t&>(val);
             if (ret == 1)
@@ -936,7 +932,7 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
                 ++(this->n_occupied);
             }
             else
-                ++(this->n_size); // then ret == 2
+            ++(this->n_size); // then ret == 2
             return inspair_t(iterator(i, keys_ptr, flags_ptr, vals_ptr), true);
         }
         inline inspair_t insert(const value_type& val)
@@ -949,14 +945,14 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
             khashint_t i;
             int ret = direct_insert_aux(key, this->n_capacity, this->keys.get(), this->flags.get(), &i);
             if (ret == 0)
-                return vals[i];
+            return vals[i];
             if (ret == 1)
             {
                 ++(this->n_size);
                 ++(this->n_occupied);
             }
             else
-                ++(this->n_size); // then ret == 2
+            ++(this->n_size); // then ret == 2
             vals[i] = valtype_t();
             return vals[i];
         }
@@ -980,7 +976,7 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
                 return iterator(i, this->keys.get(), this->flags.get(), vals.get());
             }
             else
-                return this->end();
+            return this->end();
         }
         inline iterator begin()
         {
@@ -997,6 +993,6 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
             alloc.deallocate_ptr((char*) vals.get());
             vals = 0;
         }
-};
+    };
 
 #endif // AC_KHASH_HH_

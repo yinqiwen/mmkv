@@ -79,7 +79,7 @@ namespace mmkv
             int HLLAdd(Object& o, unsigned char *ele, size_t elesize);
 
             void AssignScoreValue(ScoreValue& sv, double score, const Data& value);
-            MMKVTable* GetMMKVTable(DBID db, bool create_if_notexist);
+            MMKVTable* GetMMKVTable(DBID db, bool create_if_notexist, bool lock = true);
             void ClearTTL(DBID db, const Object& key, Object& value);
             void SetTTL(DBID db, const Object& key, Object& value, uint64_t ttl);
             uint64_t GetTTL(DBID db, const Object& key, const Object& value);
@@ -100,7 +100,7 @@ namespace mmkv
 
             int GenericZSetInterUnion(DBID db, int op,const Data& destination, const DataArray& keys, const WeightArray& weights,
                     const std::string& aggregate);
-            int ReOpen();
+            int ReOpen(bool lock);
         public:
             MMKVImpl();
             MemorySegmentManager& GetMemoryManager()
@@ -122,7 +122,7 @@ namespace mmkv
                 }
                 err = 0;
                 ConstructorProxy<T> proxy;
-                MMKVTable* kv = GetMMKVTable(db, create_if_notexist);
+                MMKVTable* kv = GetMMKVTable(db, create_if_notexist, false);
                 if (NULL == kv)
                 {
                     err = ERR_DB_NOT_EXIST;
@@ -132,12 +132,13 @@ namespace mmkv
                 if (create_if_notexist)
                 {
                     std::pair<MMKVTable::iterator, bool> ret = kv->insert(MMKVTable::value_type(tmpkey, Object()));
-                    Object& value_data = const_cast<Object&>(ret.first.value());
+                    //Object& value_data = const_cast<Object&>(ret.first.value());
+                    Object& value_data = ret.first->second;
                     if (ret.second || IsExpired(db, key, value_data))
                     {
                         if (ret.second)
                         {
-                            m_segment.AssignObjectValue(const_cast<Object&>(ret.first.key()), key, true);
+                            m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), key, true);
                         }
                         else
                         {
@@ -159,7 +160,7 @@ namespace mmkv
                             err = ERR_INVALID_TYPE;
                             return proxy;
                         }
-                        proxy.ptr = (T*) (ret.first.value().RawValue());
+                        proxy.ptr = (T*) (ret.first->second.RawValue());
                         proxy.invoke_constructor = false;
                     }
                 }
@@ -168,7 +169,7 @@ namespace mmkv
                     MMKVTable::iterator found = kv->find(tmpkey);
                     if (found != kv->end())
                     {
-                        const Object& value_data = found.value();
+                        Object& value_data = found->second;
                         if (IsExpired(db, key, value_data))
                         {
                             err = ERR_ENTRY_NOT_EXIST;

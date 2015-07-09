@@ -40,6 +40,8 @@ uname_S := $(shell sh -c 'uname -s 2>/dev/null || echo not')
 
 LIB_PATH=$(PWD)/../deps
 
+DIST_PATH=$(PWD)/../dist
+
 OPTIMIZATION?=-O2
 OPT=$(OPTIMIZATION)
 
@@ -78,7 +80,7 @@ TESTOBJ := ../test/ut.o ../test/test_main.o
 DIST_LIBA = libmmkv.a
 
 
-all: test_boost $(DIST_LIB) test  
+all: test_boost $(DIST_LIB) test dist 
 
 $(DIST_LIB): $(COMMON_OBJECTS)
 	${CXX} -shared -o $@ $^
@@ -129,4 +131,14 @@ clean_test:
 	
 clean:
 	rm -f  ${COMMON_OBJECTS} ${TESTOBJ} $(DIST_LIBA) mmkv-test
+
+dist:lib
+	mkdir -p ${DIST_PATH}/include/mmkv_containers;\
+	mkdir -p ${DIST_PATH}/lib;\
+	cp -f khash.hh ${DIST_PATH}/include/mmkv_containers;\
+	cp -rf ${LIB_PATH}/cpp-btree ${DIST_PATH}/include/mmkv_containers;\
+	cp -rf ${SPARSEHASH_PATH}/src/sparsehash ${DIST_PATH}/include/mmkv_containers;\
+	cp -f mmkv.hpp mmkv_logger.hpp mmkv_options.hpp mmkv_allocator.hpp malloc-2.8.3.h ${DIST_PATH}/include; \ 
+	cp -f ${DIST_LIBA} ${DIST_PATH}/lib
+	
 

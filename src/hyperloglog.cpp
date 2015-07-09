@@ -1376,10 +1376,12 @@ namespace mmkv
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         Object tmpkey(key);
         std::pair<MMKVTable::iterator, bool> ret = kv->insert(MMKVTable::value_type(tmpkey, Object()));
-        Object& value_data = const_cast<Object&>(ret.first.value());
+//        Object& value_data = const_cast<Object&>(ret.first.value());
+        Object& value_data = ret.first->second;
         if (ret.second)
         {
-            AssignObjectContent(const_cast<Object&>(ret.first.key()), key, true);
+//            AssignObjectContent(const_cast<Object&>(ret.first.key()), key, true);
+            AssignObjectContent(const_cast<Object&>(ret.first->first), key, true);
             CreateHLLObject(value_data);
             updated++;
         }
@@ -1566,14 +1568,16 @@ namespace mmkv
         /* Create / unshare the destination key's value if needed. */
         Object tmpkey(destkey);
         std::pair<MMKVTable::iterator, bool> iret = kv->insert(MMKVTable::value_type(tmpkey, Object()));
-        Object& value_data = const_cast<Object&>(iret.first.value());
+//        Object& value_data = const_cast<Object&>(iret.first.value());
+        Object& value_data = iret.first->second;
         if (iret.second)
         {
             /* Create the key with a string value of the exact length to
              * hold our HLL data structure. sdsnewlen() when NULL is passed
              * is guaranteed to return bytes initialized to zero. */
             CreateHLLObject(value_data);
-            AssignObjectContent(const_cast<Object&>(iret.first.key()), destkey, true);
+            //AssignObjectContent(const_cast<Object&>(iret.first.key()), destkey, true);
+            AssignObjectContent(const_cast<Object&>(iret.first->first), destkey, true);
         }
         else
         {

@@ -285,7 +285,7 @@ namespace mmkv
             return 0;
         }
         size_t inc = new_size - meta->file_size;
-        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(*this);
+
         munmap(m_data_buf, meta->file_size);
         char data_path[m_open_options.dir.size() + 100];
         sprintf(data_path, "%s/data", m_open_options.dir.c_str());
@@ -297,7 +297,6 @@ namespace mmkv
         {
             return -1;
         }
-        madvise(data_buf.buf, data_buf.size, MADV_RANDOM);
         m_data_buf = data_buf.buf;
         ReCreate(false);
         PostInit();

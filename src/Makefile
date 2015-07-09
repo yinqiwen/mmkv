@@ -45,8 +45,8 @@ DIST_PATH=$(PWD)/../dist
 OPTIMIZATION?=-O2
 OPT=$(OPTIMIZATION)
 
-CXXFLAGS=-Wall -g ${OPT} -fPIC -D__STDC_FORMAT_MACROS -DMMKV_VERSION='"${MMKV_VERSION}"' -DXXH_NAMESPACE=LZ4_
-CCFLAGS=-Wall -std=gnu99 ${OPT} -fPIC -pedantic -g -D__STDC_FORMAT_MACROS -DMMKV_VERSION='"${MMKV_VERSION}"' -DXXH_NAMESPACE=LZ4_
+CXXFLAGS=-Wall -g ${OPT} -fPIC -D__STDC_FORMAT_MACROS -DMMKV_VERSION='"${MMKV_VERSION}"'
+CCFLAGS=-Wall -std=gnu99 ${OPT} -fPIC -pedantic -g -D__STDC_FORMAT_MACROS -DMMKV_VERSION='"${MMKV_VERSION}"'
 LDFLAGS=-g 
 
 
@@ -139,6 +139,6 @@ dist:lib
 	cp -rf ${LIB_PATH}/cpp-btree ${DIST_PATH}/include/mmkv_containers;\
 	cp -rf ${SPARSEHASH_PATH}/src/sparsehash ${DIST_PATH}/include/mmkv_containers;\
 	cp -f mmkv.hpp mmkv_logger.hpp mmkv_options.hpp mmkv_allocator.hpp malloc-2.8.3.h ${DIST_PATH}/include; \ 
-	cp -f ${DIST_LIBA} ${DIST_PATH}/lib
+	cp -f ${DIST_LIBA} ${DIST_PATH}/lib; cp -f ${LIB_PATH}/lz4/liblz4.a ${DIST_PATH}/lib
 	
 

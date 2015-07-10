@@ -38,7 +38,6 @@ namespace mmkv
     {
         Object tmpkey(key);
         std::pair<MMKVTable::iterator, bool> ret = table->insert(MMKVTable::value_type(tmpkey, Object()));
-//        Object& value_data = const_cast<Object&>(ret.first.value());
         Object& value_data = const_cast<Object&>(ret.first->second);
         if (ret.second)
         {
@@ -109,12 +108,13 @@ namespace mmkv
         {
             return ERR_PERMISSION_DENIED;
         }
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         MMKVTable* kv = GetMMKVTable(db, true);
         if (NULL == kv)
         {
             return ERR_DB_NOT_EXIST;
         }
-        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         return GenericSet(kv, db, key, value, ex, px, nx_xx);
     }
 
@@ -141,12 +141,12 @@ namespace mmkv
 
     int MMKVImpl::Get(DBID db, const Data& key, std::string& value)
     {
+        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         MMKVTable* kv = GetMMKVTable(db, false);
         if (NULL == kv)
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         return GenericGet(kv, db, key, value);
     }
 
@@ -156,13 +156,14 @@ namespace mmkv
         {
             return ERR_PERMISSION_DENIED;
         }
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         MMKVTable* kv = GetMMKVTable(db, true);
         if (NULL == kv)
         {
             return ERR_ENTRY_NOT_EXIST;
         }
         bool created = false;
-        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         Object& value_data = FindOrCreateStringValue(kv, key, value, false, created);
         if (!created)
         {
@@ -191,13 +192,14 @@ namespace mmkv
         {
             return ERR_PERMISSION_DENIED;
         }
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         MMKVTable* kv = GetMMKVTable(db, true);
         if (NULL == kv)
         {
             return ERR_ENTRY_NOT_EXIST;
         }
         bool created = false;
-        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         Object& value_data = FindOrCreateStringValue(kv, key, value, false, created);
         if (!created)
         {
@@ -219,12 +221,13 @@ namespace mmkv
 
     int MMKVImpl::Strlen(DBID db, const Data& key)
     {
+        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         MMKVTable* kv = GetMMKVTable(db, false);
         if (NULL == kv)
         {
             return 0;
         }
-        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
+
         const Object* value_data = FindMMValue(kv, key);
         if (NULL == value_data)
         {
@@ -234,10 +237,6 @@ namespace mmkv
         {
             return ERR_INVALID_TYPE;
         }
-//        if (value_data->IsExpired())
-//        {
-//            return 0;
-//        }
         return value_data->len;
     }
 
@@ -252,14 +251,14 @@ namespace mmkv
 
     int MMKVImpl::GetRange(DBID db, const Data& key, int start, int end, std::string& value)
     {
-        MMKVTable* kv = GetMMKVTable(db, false);
-        if (NULL == kv)
-        {
-            return ERR_ENTRY_NOT_EXIST;
-        }
         std::string vv;
         {
             RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
+            MMKVTable* kv = GetMMKVTable(db, false);
+            if (NULL == kv)
+            {
+                return ERR_ENTRY_NOT_EXIST;
+            }
             GenericGet(kv, db, key, vv);
         }
         size_t strlen = vv.size();
@@ -297,18 +296,17 @@ namespace mmkv
         {
             return ERR_PERMISSION_DENIED;
         }
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         MMKVTable* kv = GetMMKVTable(db, true);
         if (NULL == kv)
         {
             return ERR_DB_NOT_EXIST;
         }
         Object tmpkey(key);
-        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         std::pair<MMKVTable::iterator, bool> ret = kv->insert(MMKVTable::value_type(tmpkey, Object()));
-//        const Object& kk = ret.first.key();
-//        Object& value_data = const_cast<Object&>(ret.first.value());
         const Object& kk = ret.first->first;
-        Object& value_data = const_cast<Object&>(ret.first->second);
+        Object& value_data = ret.first->second;
         if (!ret.second)
         {
             if (value_data.type != V_TYPE_STRING)
@@ -341,13 +339,14 @@ namespace mmkv
         {
             return ERR_PERMISSION_DENIED;
         }
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         MMKVTable* kv = GetMMKVTable(db, true);
         if (NULL == kv)
         {
             return ERR_DB_NOT_EXIST;
         }
         Object tmpkey(key);
-        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         std::pair<MMKVTable::iterator, bool> ret = kv->insert(MMKVTable::value_type(tmpkey, Object()));
         const Object& kk = ret.first->first;
         Object& value_data = ret.first->second;
@@ -403,13 +402,13 @@ namespace mmkv
     }
     int MMKVImpl::MGet(DBID db, const DataArray& keys, StringArray& vals)
     {
+        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         MMKVTable* kv = GetMMKVTable(db, false);
         if (NULL == kv)
         {
             return ERR_ENTRY_NOT_EXIST;
         }
         vals.resize(keys.size());
-        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         for (size_t i = 0; i < keys.size(); i++)
         {
             GenericGet(kv, db, keys[i], vals[i]);
@@ -422,12 +421,13 @@ namespace mmkv
         {
             return ERR_PERMISSION_DENIED;
         }
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         MMKVTable* kv = GetMMKVTable(db, true);
         if (NULL == kv)
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         for (size_t i = 0; i < key_vals.size(); i++)
         {
             GenericSet(kv, db, key_vals[i].first, key_vals[i].second, -1, -1, -1);
@@ -440,13 +440,14 @@ namespace mmkv
         {
             return ERR_PERMISSION_DENIED;
         }
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         MMKVTable* kv = GetMMKVTable(db, true);
         if (NULL == kv)
         {
             return ERR_ENTRY_NOT_EXIST;
         }
         int count = 0;
-        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         for (size_t i = 0; i < key_vals.size(); i++)
         {
             int ret = GenericSet(kv, db, key_vals[i].first, key_vals[i].second, -1, -1, 0);
@@ -479,13 +480,15 @@ namespace mmkv
         {
             return ERR_OFFSET_OUTRANGE;
         }
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         MMKVTable* kv = GetMMKVTable(db, false);
         if (NULL == kv)
         {
             return ERR_ENTRY_NOT_EXIST;
         }
         Object tmpkey(key);
-        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+
         std::pair<MMKVTable::iterator, bool> ret = kv->insert(MMKVTable::value_type(tmpkey, Object()));
         const Object& kk = ret.first->first;
         Object& value_data = ret.first->second;

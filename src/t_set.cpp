@@ -44,8 +44,10 @@ namespace mmkv
             return ERR_PERMISSION_DENIED;
         }
         int err = 0;
-        ObjectAllocator allocator = m_segment.ValueAllocator<Object>();
+
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
+        ObjectAllocator allocator = m_segment.ValueAllocator<Object>();
         StringSet* set = GetObject<StringSet>(db, key, V_TYPE_SET, true, err)(std::less<Object>(), allocator);
         if (NULL == set || 0 != err)
         {
@@ -66,7 +68,7 @@ namespace mmkv
     int MMKVImpl::SCard(DBID db, const Data& key)
     {
         int err = 0;
-        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         StringSet* set = GetObject<StringSet>(db, key, V_TYPE_SET, false, err)();
         if (IS_NOT_EXISTS(err))
         {
@@ -284,6 +286,7 @@ namespace mmkv
             return ERR_PERMISSION_DENIED;
         }
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         return GenericSInterDiffUnion(db, OP_INTER, keys, &destination, NULL);
     }
     int MMKVImpl::SIsMember(DBID db, const Data& key, const Data& member)
@@ -329,6 +332,7 @@ namespace mmkv
         }
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         StringSet* set1 = GetObject<StringSet>(db, source, V_TYPE_SET, false, err)();
         if (NULL == set1 || 0 != err)
         {
@@ -370,6 +374,7 @@ namespace mmkv
         members.clear();
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         StringSet* set = GetObject<StringSet>(db, key, V_TYPE_SET, false, err)();
         if (IS_NOT_EXISTS(err))
         {
@@ -448,6 +453,7 @@ namespace mmkv
         }
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         StringSet* set = GetObject<StringSet>(db, key, V_TYPE_SET, false, err)();
         if (IS_NOT_EXISTS(err))
         {
@@ -487,6 +493,7 @@ namespace mmkv
             return ERR_PERMISSION_DENIED;
         }
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         return GenericSInterDiffUnion(db, OP_UNION, keys, &destination, NULL);
     }
 }

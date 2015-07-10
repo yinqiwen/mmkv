@@ -39,7 +39,7 @@ namespace mmkv
     size_t redis_popcount(void *s, long count)
     {
         size_t bits = 0;
-        unsigned char *p = (unsigned char *)s;
+        unsigned char *p = (unsigned char *) s;
         uint32_t *p4;
         static const unsigned char bitsinbyte[256] =
             { 0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 1, 2, 2,
@@ -201,19 +201,17 @@ namespace mmkv
         long strlen;
         unsigned char *p;
         char llbuf[32];
-
+        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         MMKVTable* kv = GetMMKVTable(db, false);
         if (NULL == kv)
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         MMKVTable::iterator found = kv->find(key);
         if (found == kv->end())
         {
             return 0;
         }
-//        const Object& value_data = found.value();
         Object& value_data = found->second;
         if (value_data.type != V_TYPE_STRING)
         {
@@ -298,12 +296,14 @@ namespace mmkv
         {
             return ERR_ARGS_EXCEED_LIMIT;
         }
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         MMKVTable* kv = GetMMKVTable(db, false);
         if (NULL == kv)
         {
             return ERR_DB_NOT_EXIST;
         }
-        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+
         /* Lookup keys, and store pointers to the string objects into an array. */
         numkeys = keys.size();
         unsigned char *src[numkeys]; /* Array of source strings pointers. */
@@ -330,10 +330,11 @@ namespace mmkv
             if (o->IsInteger())
             {
                 ll2string(llbuf[j], 32, o->IntegerValue());
-                src[j] = (unsigned char *)llbuf[j];
-            }else
+                src[j] = (unsigned char *) llbuf[j];
+            }
+            else
             {
-                src[j] =(unsigned char *)o->data;
+                src[j] = (unsigned char *) o->data;
             }
             //objects[j] = o;
 
@@ -481,12 +482,13 @@ namespace mmkv
         {
             return ERR_BIT_OUTRANGE;
         }
+        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         MMKVTable* kv = GetMMKVTable(db, false);
         if (NULL == kv)
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
+
         MMKVTable::iterator found = kv->find(key);
         if (found == kv->end())
         {
@@ -495,7 +497,6 @@ namespace mmkv
              * If the user is looking for the first set bit, return -1. */
             return bit ? -1 : 0;
         }
-//        const Object& value_data = found.value();
         Object& value_data = found->second;
         if (value_data.type != V_TYPE_STRING)
         {
@@ -569,24 +570,23 @@ namespace mmkv
         size_t bitoffset = offset;
         size_t byte, bit;
         size_t bitval = 0;
+        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         MMKVTable* kv = GetMMKVTable(db, false);
         if (NULL == kv)
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         MMKVTable::iterator found = kv->find(key);
         if (found == kv->end())
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-//        const Object& value_data = found.value();
         Object& value_data = found->second;
         if (value_data.type != V_TYPE_STRING)
         {
             return ERR_INVALID_TYPE;
         }
-        if (IsExpired(db, key,value_data))
+        if (IsExpired(db, key, value_data))
         {
             return 0;
         }
@@ -621,6 +621,8 @@ namespace mmkv
         {
             return ERR_OFFSET_OUTRANGE;
         }
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         MMKVTable* kv = GetMMKVTable(db, true);
         if (NULL == kv)
         {
@@ -635,12 +637,9 @@ namespace mmkv
         int byteval, bitval;
         byte = bitoffset >> 3;
 
-        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         std::pair<MMKVTable::iterator, bool> ret = kv->insert(MMKVTable::value_type(key, Object()));
-//        const Object& kk = ret.first.key();
-//        Object& value_data = const_cast<Object&>(ret.first.value());
-                const Object& kk = ret.first->first;
-                Object& value_data = ret.first->second;
+        const Object& kk = ret.first->first;
+        Object& value_data = ret.first->second;
         if (!ret.second)
         {
             if (value_data.type != V_TYPE_STRING)
@@ -648,7 +647,7 @@ namespace mmkv
                 return ERR_INVALID_TYPE;
             }
             ClearTTL(db, kk, value_data);
-            if (value_data.IsInteger() || value_data.len < (size_t)(byte + 1))
+            if (value_data.IsInteger() || value_data.len < (size_t) (byte + 1))
             {
                 m_segment.ObjectMakeRoom(value_data, byte + 1, false);
             }

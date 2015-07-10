@@ -71,8 +71,10 @@ namespace mmkv
             return ERR_PERMISSION_DENIED;
         }
         int err = 0;
-        Allocator<char> allocator = m_segment.ValueAllocator<char>();
+
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
+        Allocator<char> allocator = m_segment.ValueAllocator<char>();
         ZSet* zset = GetObject<ZSet>(db, key, V_TYPE_ZSET, xx ? false : true, err)(allocator);
         if (IS_NOT_EXISTS(err))
         {
@@ -310,8 +312,10 @@ namespace mmkv
         }
         int err = 0;
         new_score = 0;
-        Allocator<char> allocator = m_segment.ValueAllocator<char>();
+
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
+        Allocator<char> allocator = m_segment.ValueAllocator<char>();
         ZSet* zset = GetObject<ZSet>(db, key, V_TYPE_ZSET, true, err)(allocator);
         if (0 != err)
         {
@@ -691,6 +695,7 @@ namespace mmkv
         }
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         ZSet* zset = GetObject<ZSet>(db, key, V_TYPE_ZSET, false, err)();
         if (IS_NOT_EXISTS(err))
         {
@@ -783,6 +788,7 @@ namespace mmkv
     {
         int err;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         ZSet* zset = GetObject<ZSet>(db, key, V_TYPE_ZSET, false, err)();
         if (IS_NOT_EXISTS(err))
         {
@@ -1131,6 +1137,7 @@ namespace mmkv
     {
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         ZSet* zset = GetObject<ZSet>(db, key, V_TYPE_ZSET, false, err)();
         if (0 != err)
         {
@@ -1211,8 +1218,9 @@ namespace mmkv
         std::vector<Object*> sets;
         sets.resize(keys.size());
         int err;
-        Allocator<char> allocator = m_segment.ValueAllocator<char>();
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
+        Allocator<char> allocator = m_segment.ValueAllocator<char>();
         ZSet* destset = GetObject<ZSet>(db, destination, V_TYPE_ZSET, true, err)(allocator);
         if (0 != err)
         {

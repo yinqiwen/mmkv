@@ -57,6 +57,8 @@ namespace mmkv
             typedef std::map<uint32_t, PODestructor*> PODestructorTable;
             PODestructorTable m_destructors;
 
+            OpenOptions m_options;
+
             void* Malloc(size_t size);
             void Free(void* p);
             void Lock(bool readonly);
@@ -79,7 +81,7 @@ namespace mmkv
             int HLLAdd(Object& o, unsigned char *ele, size_t elesize);
 
             void AssignScoreValue(ScoreValue& sv, double score, const Data& value);
-            MMKVTable* GetMMKVTable(DBID db, bool create_if_notexist, bool lock = true);
+            MMKVTable* GetMMKVTable(DBID db, bool create_if_notexist);
             void ClearTTL(DBID db, const Object& key, Object& value);
             void SetTTL(DBID db, const Object& key, Object& value, uint64_t ttl);
             uint64_t GetTTL(DBID db, const Object& key, const Object& value);
@@ -101,6 +103,7 @@ namespace mmkv
             int GenericZSetInterUnion(DBID db, int op,const Data& destination, const DataArray& keys, const WeightArray& weights,
                     const std::string& aggregate);
             int ReOpen(bool lock);
+            int EnsureWritableValueSpace(size_t space_size = 0);
         public:
             MMKVImpl();
             MemorySegmentManager& GetMemoryManager()
@@ -122,7 +125,7 @@ namespace mmkv
                 }
                 err = 0;
                 ConstructorProxy<T> proxy;
-                MMKVTable* kv = GetMMKVTable(db, create_if_notexist, false);
+                MMKVTable* kv = GetMMKVTable(db, create_if_notexist);
                 if (NULL == kv)
                 {
                     err = ERR_DB_NOT_EXIST;

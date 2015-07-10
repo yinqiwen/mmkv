@@ -38,8 +38,9 @@ namespace mmkv
             int64_t size;
             float keyspace_factor;
             bool autoexpand;
+            int64_t ensure_space_size;
             CreateOptions() :
-                    size(1024 * 1024 * 1024), keyspace_factor(0.25),autoexpand(false)
+                    size(1024 * 1024 * 1024), keyspace_factor(0.25), autoexpand(false), ensure_space_size(512 * 1024 * 1024)
             {
             }
     };
@@ -56,9 +57,9 @@ namespace mmkv
             LoggerFunc* log_func;
             CreateOptions create_options;
             OpenOptions() :
-                    dir("./mmkv"), readonly(false), verify(true), reserve_keyspace(false), reserve_valuespace(
-                            false), use_lock(false), create_if_notexist(false), log_level(INFO_LOG_LEVEL), log_func(
-                            NULL)
+                    dir("./mmkv"), readonly(false), verify(true), reserve_keyspace(false), reserve_valuespace(false), use_lock(
+                            false), create_if_notexist(false), log_level(INFO_LOG_LEVEL), log_func(
+                    NULL)
             {
             }
     };

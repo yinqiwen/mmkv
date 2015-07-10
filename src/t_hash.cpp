@@ -127,8 +127,10 @@ namespace mmkv
             return ERR_PERMISSION_DENIED;
         }
         int err = 0;
-        StringMapAllocator allocator = m_segment.ValueAllocator<StringPair>();
+
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
+        StringMapAllocator allocator = m_segment.ValueAllocator<StringPair>();
         StringHashTable* hash = GetObject<StringHashTable>(db, key, V_TYPE_HASH, true, err)(allocator);
         if (NULL == hash || 0 != err)
         {
@@ -163,8 +165,9 @@ namespace mmkv
             return ERR_PERMISSION_DENIED;
         }
         int err = 0;
-        StringMapAllocator allocator = m_segment.ValueAllocator<StringPair>();
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
+        StringMapAllocator allocator = m_segment.ValueAllocator<StringPair>();
         StringHashTable* hash = GetObject<StringHashTable>(db, key, V_TYPE_HASH, true, err)(allocator);
         if (NULL == hash || 0 != err)
         {
@@ -284,8 +287,10 @@ namespace mmkv
             return ERR_PERMISSION_DENIED;
         }
         int err = 0;
-        StringMapAllocator allocator = m_segment.ValueAllocator<StringPair>();
+
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
+        StringMapAllocator allocator = m_segment.ValueAllocator<StringPair>();
         StringHashTable* hash = GetObject<StringHashTable>(db, key, V_TYPE_HASH, true, err)(allocator);
         if (NULL == hash || 0 != err)
         {
@@ -319,8 +324,9 @@ namespace mmkv
             return ERR_PERMISSION_DENIED;
         }
         int err = 0;
-        StringMapAllocator allocator = m_segment.ValueAllocator<StringPair>();
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
+        StringMapAllocator allocator = m_segment.ValueAllocator<StringPair>();
         StringHashTable* hash = GetObject<StringHashTable>(db, key, V_TYPE_HASH, true, err)(allocator);
         if (NULL == hash || 0 != err)
         {

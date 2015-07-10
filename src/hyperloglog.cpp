@@ -1366,6 +1366,8 @@ namespace mmkv
         {
             return ERR_PERMISSION_DENIED;
         }
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         MMKVTable* kv = GetMMKVTable(db, true);
         if (NULL == kv)
         {
@@ -1373,14 +1375,11 @@ namespace mmkv
         }
         int err = 0;
         int updated = 0;
-        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         Object tmpkey(key);
         std::pair<MMKVTable::iterator, bool> ret = kv->insert(MMKVTable::value_type(tmpkey, Object()));
-//        Object& value_data = const_cast<Object&>(ret.first.value());
         Object& value_data = ret.first->second;
         if (ret.second)
         {
-//            AssignObjectContent(const_cast<Object&>(ret.first.key()), key, true);
             AssignObjectContent(const_cast<Object&>(ret.first->first), key, true);
             CreateHLLObject(value_data);
             updated++;
@@ -1431,13 +1430,13 @@ namespace mmkv
         struct hllhdr *hdr;
         uint64_t card;
         int err = 0;
-
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         MMKVTable* kv = GetMMKVTable(db, false);
         if (NULL == kv)
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         /* Case 1: multi-key keys, cardinality of the union.
          *
          * When multiple keys are specified, PFCOUNT actually computes
@@ -1533,12 +1532,14 @@ namespace mmkv
         {
             return ERR_PERMISSION_DENIED;
         }
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         MMKVTable* kv = GetMMKVTable(db, false);
         if (NULL == kv)
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+
 
         uint8_t max[HLL_REGISTERS];
         struct hllhdr *hdr;

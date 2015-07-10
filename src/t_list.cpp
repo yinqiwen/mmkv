@@ -60,6 +60,7 @@ namespace mmkv
         }
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         StringList* list = GetObject<StringList>(db, key, V_TYPE_LIST, false, err)();
         if (NULL == list)
         {
@@ -106,6 +107,7 @@ namespace mmkv
         }
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         StringList* list = GetObject<StringList>(db, key, V_TYPE_LIST, false, err)();
         if (0 != err)
         {
@@ -129,8 +131,10 @@ namespace mmkv
             return ERR_PERMISSION_DENIED;
         }
         int err = 0;
-        ObjectAllocator alloc = m_segment.ValueAllocator<Object>();
+
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
+        ObjectAllocator alloc = m_segment.ValueAllocator<Object>();
         StringList* list = GetObject<StringList>(db, key, V_TYPE_LIST, nx ? false : true, err)(alloc);
         if (0 != err)
         {
@@ -180,6 +184,7 @@ namespace mmkv
         }
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         StringList* list = GetObject<StringList>(db, key, V_TYPE_LIST, false, err)();
         if (NULL == list)
         {
@@ -234,6 +239,7 @@ namespace mmkv
         }
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         StringList* list = GetObject<StringList>(db, key, V_TYPE_LIST, false, err)();
         if (NULL == list || 0 != err)
         {
@@ -260,6 +266,7 @@ namespace mmkv
         }
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         StringList* list = GetObject<StringList>(db, key, V_TYPE_LIST, false, err)();
         if (0 != err)
         {
@@ -317,6 +324,7 @@ namespace mmkv
         }
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
         StringList* list = GetObject<StringList>(db, key, V_TYPE_LIST, false, err)();
         if (0 != err)
         {
@@ -340,9 +348,10 @@ namespace mmkv
             return ERR_PERMISSION_DENIED;
         }
 
-        ObjectAllocator alloc = m_segment.ValueAllocator<Object>();
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
+        ObjectAllocator alloc = m_segment.ValueAllocator<Object>();
         StringList* src_list = GetObject<StringList>(db, source, V_TYPE_LIST, false, err)();
 
         if (0 != err)
@@ -372,9 +381,11 @@ namespace mmkv
         {
             return ERR_PERMISSION_DENIED;
         }
-        ObjectAllocator alloc = m_segment.ValueAllocator<Object>();
+
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        EnsureWritableValueSpace();
+        ObjectAllocator alloc = m_segment.ValueAllocator<Object>();
         StringList* list = GetObject<StringList>(db, key, V_TYPE_LIST, nx ? false : true, err)(alloc);
         if (0 != err)
         {

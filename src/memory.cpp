@@ -251,7 +251,7 @@ namespace mmkv
         return 0;
     }
 
-    int MemorySegmentManager::EnsureWritableSpace(size_t space_size)
+    int MemorySegmentManager::EnsureWritableValueSpace(size_t space_size)
     {
         if (m_open_options.readonly)
         {
@@ -259,12 +259,8 @@ namespace mmkv
             return -1;
         }
         Meta* meta = (Meta*) m_data_buf;
-        size_t total_size = mspace_top_size((char*) (meta) + meta->keyspace_offset);
-        if(meta->IsKeyValueSplit())
-        {
-            total_size += mspace_top_size((char*) (meta) + meta->valuespace_offset);
-        }
-        if(total_size < space_size)
+        size_t top_size = mspace_top_size((char*) (meta) + meta->valuespace_offset);
+        if(top_size < space_size)
         {
             size_t new_size = meta->file_size * 2;
             return Expand(new_size);

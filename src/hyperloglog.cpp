@@ -1375,7 +1375,7 @@ namespace mmkv
         }
         int err = 0;
         int updated = 0;
-        Object tmpkey(key);
+        Object tmpkey(key, false);
         std::pair<MMKVTable::iterator, bool> ret = kv->insert(MMKVTable::value_type(tmpkey, Object()));
         Object& value_data = ret.first->second;
         if (ret.second)
@@ -1567,7 +1567,7 @@ namespace mmkv
         }
 
         /* Create / unshare the destination key's value if needed. */
-        Object tmpkey(destkey);
+        Object tmpkey(destkey, false);
         std::pair<MMKVTable::iterator, bool> iret = kv->insert(MMKVTable::value_type(tmpkey, Object()));
 //        Object& value_data = const_cast<Object&>(iret.first.value());
         Object& value_data = iret.first->second;

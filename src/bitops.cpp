@@ -207,7 +207,7 @@ namespace mmkv
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-        MMKVTable::iterator found = kv->find(key);
+        MMKVTable::iterator found = kv->find(Object(key, false));
         if (found == kv->end())
         {
             return 0;
@@ -466,7 +466,7 @@ namespace mmkv
         }
         else
         {
-            GenericDel(kv, dest_key);
+            GenericDel(kv, Object(dest_key, false));
         }
         return maxlen;
     }
@@ -489,7 +489,7 @@ namespace mmkv
             return ERR_ENTRY_NOT_EXIST;
         }
 
-        MMKVTable::iterator found = kv->find(key);
+        MMKVTable::iterator found = kv->find(Object(key, false));
         if (found == kv->end())
         {
             /* If the key does not exist, from our point of view it is an infinite
@@ -576,7 +576,7 @@ namespace mmkv
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-        MMKVTable::iterator found = kv->find(key);
+        MMKVTable::iterator found = kv->find(Object(key, false));
         if (found == kv->end())
         {
             return ERR_ENTRY_NOT_EXIST;
@@ -637,7 +637,8 @@ namespace mmkv
         int byteval, bitval;
         byte = bitoffset >> 3;
 
-        std::pair<MMKVTable::iterator, bool> ret = kv->insert(MMKVTable::value_type(key, Object()));
+        Object key_obj(key, false);
+        std::pair<MMKVTable::iterator, bool> ret = kv->insert(MMKVTable::value_type(key_obj, Object()));
         const Object& kk = ret.first->first;
         Object& value_data = ret.first->second;
         if (!ret.second)

@@ -36,6 +36,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <string.h>
+#include <limits.h>
 #include <new>
 
 namespace mmkv
@@ -43,9 +44,10 @@ namespace mmkv
     static const char* kTableConstName = "MMKVTable";
     static const char* kTTLConstName = "MMKVTTLSet";
     static const char* kTTLTableConstName = "MMKVTTLMap";
+    static const char* kDBIDSetName = "MMKVDBIDSet";
 
     MMKVImpl::MMKVImpl() :
-            m_readonly(false), m_ttlset(NULL), m_ttlmap(NULL)
+            m_readonly(false), m_ttlset(NULL), m_ttlmap(NULL), m_dbid_set(NULL)
     {
 
     }
@@ -83,6 +85,18 @@ namespace mmkv
         return m_segment.ValueAllocator<char>();
     }
 
+    int MMKVImpl::DeleteMMKVTable(DBID db)
+    {
+        LockGuard<SpinMutexLock> keylock_guard(m_kv_table_lock);
+        if (m_kvs.size() > db)
+        {
+            m_kvs[db] = NULL;
+        }
+        char name[100];
+        sprintf(name, "%s_%u", kTableConstName, db);
+        return m_segment.EraseObject<MMKVTable>(name);
+    }
+
     MMKVTable* MMKVImpl::GetMMKVTable(DBID db, bool create_if_notexist)
     {
         MMKVTable* kv = NULL;
@@ -111,6 +125,7 @@ namespace mmkv
 //            kv = m_segment.FindOrConstructObject<MMKVTable>(name, &created)(0, ObjectHash(), ObjectEqual(), allocator);
             if (created)
             {
+                m_dbid_set->insert(db);
 //                Object empty;
 //                kv->set_deleted_key(empty);
 //                kv->set_empty_key(empty);
@@ -130,7 +145,7 @@ namespace mmkv
 
     const Object* MMKVImpl::FindMMValue(MMKVTable* table, const Data& key) const
     {
-        Object tmpkey(key);
+        Object tmpkey(key, false);
         MMKVTable::iterator found = table->find(tmpkey);
         if (found == table->end())
         {
@@ -147,6 +162,7 @@ namespace mmkv
             TTLValueAllocator allocator(m_segment.GetKeySpaceAllocator());
             WriteLockGuard<MemorySegmentManager> keylock_guard(m_segment, lock);
             m_ttlset = m_segment.FindOrConstructObject<TTLValueSet>(kTTLConstName)(std::less<TTLValue>(), allocator);
+            m_dbid_set = m_segment.FindOrConstructObject<DBIDSet>(kDBIDSetName)(std::less<DBID>(), allocator);
             bool created = false;
             TTLValuePairAllocator alloc2(m_segment.GetKeySpaceAllocator());
             m_ttlmap = m_segment.FindOrConstructObject<TTLValueTable>(kTTLTableConstName, &created)(0, TTLKeyHash(),
@@ -156,6 +172,10 @@ namespace mmkv
                 TTLKey empty;
                 m_ttlmap->set_deleted_key(empty);
             }
+        }
+        else
+        {
+            m_dbid_set = m_segment.FindObject<DBIDSet>(kDBIDSetName);
         }
         return 0;
     }
@@ -213,10 +233,15 @@ namespace mmkv
         {
             m_segment.Deallocate(const_cast<char*>(obj.RawValue()));
         }
+        else if (obj.IsInteger())
+        {
+            Object& o = const_cast<Object&>(obj);
+            o.Clear();
+        }
     }
-    void MMKVImpl::AssignObjectContent(const Object& obj, const Data& data, bool in_keyspace, bool try_int_encoding)
+    void MMKVImpl::AssignObjectContent(const Object& obj, const Data& data, bool in_keyspace)
     {
-        m_segment.AssignObjectValue(const_cast<Object&>(obj), data, in_keyspace, try_int_encoding);
+        m_segment.AssignObjectValue(const_cast<Object&>(obj), data, in_keyspace);
     }
 
     int MMKVImpl::GetPOD(DBID db, const Data& key, bool created_if_notexist, uint32_t expected_type, Data& v)
@@ -230,7 +255,7 @@ namespace mmkv
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-        Object tmpkey(key);
+        Object tmpkey(key, false);
         Object* value_data = NULL;
         if (created_if_notexist)
         {
@@ -300,7 +325,7 @@ namespace mmkv
 
     bool MMKVImpl::IsExpired(DBID db, const Data& key, const Object& obj)
     {
-        uint64_t ttl = GetTTL(db, key, obj);
+        uint64_t ttl = GetTTL(db, Object(key, false), obj);
         if (ttl == 0)
         {
             return false;
@@ -481,7 +506,7 @@ namespace mmkv
 
     int MMKVImpl::GenericInsertValue(MMKVTable* table, const Data& key, Object& v, bool replace)
     {
-        Object tmpkey(key);
+        Object tmpkey(key, false);
         std::pair<MMKVTable::iterator, bool> ret = table->insert(MMKVTable::value_type(tmpkey, v));
         if (!ret.second)
         {
@@ -518,7 +543,7 @@ namespace mmkv
         int count = 0;
         for (size_t i = 0; i < keys.size(); i++)
         {
-            count += GenericDel(kv, keys[i]);
+            count += GenericDel(kv, Object(keys[i], false));
         }
         return count;
     }
@@ -559,6 +584,26 @@ namespace mmkv
         return 1;
     }
 
+    int MMKVImpl::Persist(DBID db, const Data& key)
+    {
+        if (m_readonly)
+        {
+            return ERR_PERMISSION_DENIED;
+        }
+        MMKVTable* kv = GetMMKVTable(db, false);
+        if (NULL == kv)
+        {
+            return 0;
+        }
+        const Object* value_data = FindMMValue(kv, key);
+        if (NULL == value_data || value_data->hasttl == 0)
+        {
+            return 0;
+        }
+        ClearTTL(db, Object(key, false), *(const_cast<Object*>(value_data)));
+        return 1;
+    }
+
     int64_t MMKVImpl::TTL(DBID db, const Data& key)
     {
         return PTTL(db, key) / 1000;
@@ -576,7 +621,7 @@ namespace mmkv
         {
             return 0;
         }
-        return value_data->hasttl ? GetTTL(db, key, *value_data) / 1000 : 0;
+        return value_data->hasttl ? GetTTL(db, Object(key, false), *value_data) / 1000 : 0;
     }
     int MMKVImpl::Expire(DBID db, const Data& key, uint32_t secs)
     {
@@ -588,6 +633,10 @@ namespace mmkv
     }
     int MMKVImpl::PExpireat(DBID db, const Data& key, uint64_t milliseconds_timestamp)
     {
+        if (m_readonly)
+        {
+            return ERR_PERMISSION_DENIED;
+        }
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         EnsureWritableValueSpace();
         MMKVTable* kv = GetMMKVTable(db, false);
@@ -595,18 +644,22 @@ namespace mmkv
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-
-        MMKVTable::iterator found = kv->find(key);
+        Object key_obj(key, false);
+        MMKVTable::iterator found = kv->find(key_obj);
         if (found == kv->end())
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-        SetTTL(db, key, found->second, milliseconds_timestamp * 1000);
+        SetTTL(db, key_obj, found->second, milliseconds_timestamp * 1000);
         return 0;
     }
 
     int MMKVImpl::GenericMoveKey(DBID src_db, const Data& src_key, DBID dest_db, const Data& dest_key, bool nx)
     {
+        if (m_readonly)
+        {
+            return ERR_PERMISSION_DENIED;
+        }
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         EnsureWritableValueSpace();
         MMKVTable* src_kv = GetMMKVTable(src_db, false);
@@ -615,20 +668,20 @@ namespace mmkv
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-
-        MMKVTable::iterator found = src_kv->find(src_key);
+        Object src_key_obj(src_key, false);
+        MMKVTable::iterator found = src_kv->find(src_key_obj);
         if (found == src_kv->end())
         {
             return 0;
         }
 
-        Object tmpkey2(dest_key);
+        Object tmpkey2(dest_key, false);
         std::pair<MMKVTable::iterator, bool> ret = dst_kv->insert(MMKVTable::value_type(tmpkey2, found->second));
         const Object& kk = ret.first->first;
         if (ret.second)
         {
             src_kv->erase(found);
-            if (tmpkey2 == src_key)
+            if (tmpkey2 == src_key_obj)
             {
                 const_cast<Object&>(kk) = found->first;
             }
@@ -664,24 +717,100 @@ namespace mmkv
     }
     int MMKVImpl::RandomKey(DBID db, std::string& key)
     {
-        //TODO
-        return -1;
+        key.clear();
+        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
+        MMKVTable* kv = GetMMKVTable(db, false);
+        if (NULL == kv || kv->size() == 0)
+        {
+            return 0;
+        }
+        int loop_count = 0;
+        while (true)
+        {
+            MMKVTable::iterator it = kv->begin();
+            it.advance(random_between_int32(0, INT_MAX) % kv->capacity());
+            if (it.isfilled())
+            {
+                it->first.ToString(key);
+                return 0;
+            }
+            loop_count++;
+            if (loop_count > 20)
+            {
+                break;
+            }
+        }
+        MMKVTable::iterator it = kv->begin();
+        while (it != kv->end())
+        {
+            if (it.isfilled())
+            {
+                it->first.ToString(key);
+                return 0;
+            }
+            it++;
+        }
+        return 0;
     }
-    int MMKVImpl::Keys(DBID db, const std::string& pattern, StringArray& keys)
+    int MMKVImpl::Keys(DBID db, const std::string& pattern, const StringArrayResult& keys)
     {
-        //TODO
-        return -1;
+        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
+        MMKVTable* kv = GetMMKVTable(db, false);
+        if (NULL == kv)
+        {
+            return 0;
+        }
+        MMKVTable::iterator it = kv->begin();
+        while (it != kv->end())
+        {
+            if (it.isfilled())
+            {
+                std::string key_str;
+                it->first.ToString(key_str);
+                if (pattern == "*"
+                        || stringmatchlen(pattern.c_str(), pattern.size(), key_str.data(), key_str.size(), 0) == 1)
+                {
+                    std::string& ss = keys.Get();
+                    ss = key_str;
+                }
+            }
+            it++;
+        }
+        return 0;
     }
-    int MMKVImpl::Sort(DBID db, const Data& key, const std::string& by, int limit_offset, int limit_count,
-            const StringArray& get_patterns, bool desc, bool alpha_sort, const Data& destination_key)
+
+    int64_t MMKVImpl::Scan(DBID db, int64_t cursor, const std::string& pattern, int32_t limit_count, ScanCB cb,
+            void* cbdata)
     {
-        //TODO
-        return -1;
-    }
-    int MMKVImpl::Scan(DBID db, const Data& key, int cursor, const std::string& pattern, int32_t limit_count)
-    {
-        //TODO
-        return -1;
+        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
+        MMKVTable* kv = GetMMKVTable(db, false);
+        if (NULL == kv)
+        {
+            return 0;
+        }
+        int match_count = 0;
+        MMKVTable::iterator it = kv->begin();
+        it.advance(cursor >= kv->capacity() ? kv->capacity() : cursor);
+        while (it != kv->end())
+        {
+            if (it.isfilled())
+            {
+                std::string key_str;
+                it->first.ToString(key_str);
+                if (pattern == ""
+                        || stringmatchlen(pattern.c_str(), pattern.size(), key_str.c_str(), key_str.size(), 0) == 1)
+                {
+                    cb(key_str, cbdata);
+                    match_count++;
+                    if (limit_count > 0 && match_count >= limit_count)
+                    {
+                        break;
+                    }
+                }
+            }
+            it++;
+        }
+        return it.pos();
     }
 
     int64_t MMKVImpl::DBSize(DBID db)
@@ -696,7 +825,11 @@ namespace mmkv
     }
     int MMKVImpl::FlushDB(DBID db)
     {
-        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        if (m_readonly)
+        {
+            return ERR_PERMISSION_DENIED;
+        }
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> guard(m_segment);
         MMKVTable* kv = GetMMKVTable(db, false);
         if (NULL == kv)
         {
@@ -713,15 +846,22 @@ namespace mmkv
             it++;
         }
         kv->clear();
+        m_dbid_set->erase(db);
+        DeleteMMKVTable(db);
         return 0;
     }
     int MMKVImpl::FlushAll()
     {
+        if (m_readonly)
+        {
+            return ERR_PERMISSION_DENIED;
+        }
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         m_kvs.clear();
         m_segment.ReCreate(true);
         m_ttlset = NULL;
         m_ttlmap = NULL;
+        m_dbid_set = NULL;
         ReOpen(false);
         return 0;
     }
@@ -775,16 +915,16 @@ namespace mmkv
     {
         return m_segment.Restore(backup_dir, to_dir);
     }
-    bool MMKVImpl::CheckEqual(const std::string& dir)
+    bool MMKVImpl::CompareDataStore(const std::string& dir)
     {
         return m_segment.CheckEqual(dir);
     }
 
     int MMKVImpl::EnsureWritableValueSpace(size_t space_size)
     {
-        if(!m_readonly && (m_options.create_options.autoexpand || space_size > 0))
+        if (!m_readonly && (m_options.create_options.autoexpand || space_size > 0))
         {
-            if(0 == space_size)
+            if (0 == space_size)
             {
                 space_size = m_options.create_options.ensure_space_size;
             }
@@ -803,6 +943,23 @@ namespace mmkv
     {
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         return EnsureWritableValueSpace(space_size);
+    }
+
+    int MMKVImpl::GetAllDBID(DBIDArray& ids)
+    {
+        ids.clear();
+        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
+        if (NULL == m_dbid_set)
+        {
+            return 0;
+        }
+        DBIDSet::iterator it = m_dbid_set->begin();
+        while (it != m_dbid_set->end())
+        {
+            ids.push_back(*it);
+            it++;
+        }
+        return 0;
     }
 
     MMKVImpl::~MMKVImpl()

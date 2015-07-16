@@ -35,12 +35,12 @@ TEST(Append, String)
     std::string test_value = "testvalue";
     CHECK_EQ(int,g_test_kv->Set(0, "testkey", test_value) , 0, "set testkey failed");
     std::string append_value = "append";
-    CHECK_EQ(int,g_test_kv->Append(0, "testkey", append_value) , 0, "append testkey failed");
+    CHECK_EQ(int,g_test_kv->Append(0, "testkey", append_value) , 15, "append testkey failed");
     std::string v;
     CHECK_EQ(int,g_test_kv->Get(0, "testkey", v) , 0, "get testkey failed");
     CHECK_EQ(std::string,v , test_value + append_value, "get testkey failed");
     g_test_kv->Set(0, "testkey", "100");
-    CHECK_EQ(int,g_test_kv->Append(0, "testkey", append_value) , 0, "append testkey failed");
+    CHECK_EQ(int,g_test_kv->Append(0, "testkey", append_value) , 9, "append testkey failed");
     CHECK_EQ(int,g_test_kv->Get(0, "testkey", v) , 0, "get testkey failed");
     CHECK_EQ(std::string,v , "100" + append_value, "get testkey failed");
     CHECK_EQ(int,g_test_kv->GetSet(0, "testkey", "new_value", v) , 0, "getset testkey failed");
@@ -66,7 +66,7 @@ TEST(Incr, String)
     CHECK_EQ(int,v , 201, "incr testkey failed");
     CHECK_EQ(int,g_test_kv->DecrBy(0, "testkey", 1, v) , 0, "incr testkey failed");
     CHECK_EQ(int,v , 200, "incr testkey failed");
-    double dv;
+    long double dv;
     CHECK_EQ(int,g_test_kv->IncrByFloat(0, "testkey", 1.1, dv) , 0, "incr testkey failed");
     CHECK_EQ(double,dv , 201.1, "incr testkey failed");
 }
@@ -120,12 +120,12 @@ TEST(GetSetRange, String)
     CHECK_EQ(std::string,v , "string", "getrange testkey failed");
 
     CHECK_EQ(int,g_test_kv->Set(0, "mykey", "Hello World") , 0, "getrange testkey failed");
-    CHECK_EQ(int,g_test_kv->SetRange(0, "mykey", 6, "Redis") , 0, "getrange testkey failed");
+    CHECK_EQ(int,g_test_kv->SetRange(0, "mykey", 6, "Redis") , 11, "getrange testkey failed");
 
     CHECK_EQ(int,g_test_kv->Get(0, "mykey", v) , 0, "get testkey failed");
     CHECK_EQ(std::string,v , "Hello Redis", "getrange testkey failed");
     CHECK_EQ(int,g_test_kv->Del(0, "mykey") , 1, "mdel failed");
-    CHECK_EQ(int,g_test_kv->SetRange(0, "mykey", 6, "Redis") , 0, "getrange testkey failed");
+    CHECK_EQ(int,g_test_kv->SetRange(0, "mykey", 6, "Redis") , 11, "getrange testkey failed");
     CHECK_EQ(int,g_test_kv->Get(0, "mykey", v) , 0, "get testkey failed");
     std::string cmpv;
     cmpv.resize(6);

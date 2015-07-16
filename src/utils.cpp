@@ -351,6 +351,173 @@ namespace mmkv
         return 12 + digits10(v / P12);
     }
 
+    /* Glob-style pattern matching. */
+    int stringmatchlen(const char *pattern, int patternLen, const char *string, int stringLen, int nocase)
+    {
+        while (patternLen)
+        {
+            switch (pattern[0])
+            {
+                case '*':
+                    while (pattern[1] == '*')
+                    {
+                        pattern++;
+                        patternLen--;
+                    }
+                    if (patternLen == 1)
+                        return 1; /* match */
+                    while (stringLen)
+                    {
+                        if (stringmatchlen(pattern + 1, patternLen - 1, string, stringLen, nocase))
+                            return 1; /* match */
+                        string++;
+                        stringLen--;
+                    }
+                    return 0; /* no match */
+                    break;
+                case '?':
+                    if (stringLen == 0)
+                        return 0; /* no match */
+                    string++;
+                    stringLen--;
+                    break;
+                case '[':
+                {
+                    int not_match, match;
+
+                    pattern++;
+                    patternLen--;
+                    not_match = pattern[0] == '^';
+                    if (not_match)
+                    {
+                        pattern++;
+                        patternLen--;
+                    }
+                    match = 0;
+                    while (1)
+                    {
+                        if (pattern[0] == '\\')
+                        {
+                            pattern++;
+                            patternLen--;
+                            if (pattern[0] == string[0])
+                                match = 1;
+                        }
+                        else if (pattern[0] == ']')
+                        {
+                            break;
+                        }
+                        else if (patternLen == 0)
+                        {
+                            pattern--;
+                            patternLen++;
+                            break;
+                        }
+                        else if (pattern[1] == '-' && patternLen >= 3)
+                        {
+                            int start = pattern[0];
+                            int end = pattern[2];
+                            int c = string[0];
+                            if (start > end)
+                            {
+                                int t = start;
+                                start = end;
+                                end = t;
+                            }
+                            if (nocase)
+                            {
+                                start = tolower(start);
+                                end = tolower(end);
+                                c = tolower(c);
+                            }
+                            pattern += 2;
+                            patternLen -= 2;
+                            if (c >= start && c <= end)
+                                match = 1;
+                        }
+                        else
+                        {
+                            if (!nocase)
+                            {
+                                if (pattern[0] == string[0])
+                                    match = 1;
+                            }
+                            else
+                            {
+                                if (tolower((int) pattern[0]) == tolower((int) string[0]))
+                                    match = 1;
+                            }
+                        }
+                        pattern++;
+                        patternLen--;
+                    }
+                    if (not_match)
+                        match = !match;
+                    if (!match)
+                        return 0; /* no match */
+                    string++;
+                    stringLen--;
+                    break;
+                }
+                case '\\':
+                    if (patternLen >= 2)
+                    {
+                        pattern++;
+                        patternLen--;
+                    }
+                    /* fall through */
+                default:
+                    if (!nocase)
+                    {
+                        if (pattern[0] != string[0])
+                            return 0; /* no match */
+                    }
+                    else
+                    {
+                        if (tolower((int) pattern[0]) != tolower((int) string[0]))
+                            return 0; /* no match */
+                    }
+                    string++;
+                    stringLen--;
+                    break;
+            }
+            pattern++;
+            patternLen--;
+            if (stringLen == 0)
+            {
+                while (*pattern == '*')
+                {
+                    pattern++;
+                    patternLen--;
+                }
+                break;
+            }
+        }
+        if (patternLen == 0 && stringLen == 0)
+            return 1;
+        return 0;
+    }
+
+    int stringmatch(const char *pattern, const char *string, int nocase)
+    {
+        return stringmatchlen(pattern, strlen(pattern), string, strlen(string), nocase);
+    }
+
+    int string_replace(std::string& str, const std::string& pattern, const std::string& newpat)
+    {
+        int count = 0;
+        const size_t nsize = newpat.size();
+        const size_t psize = pattern.size();
+
+        for (size_t pos = str.find(pattern, 0); pos != std::string::npos; pos = str.find(pattern, pos + nsize))
+        {
+            str.replace(pos, psize, newpat);
+            count++;
+        }
+
+        return count;
+    }
+
     int lz4_compress_tofile(const char* in, size_t in_size, FILE *out, lz4_compress_callback* cb, void* data)
     {
         size_t messageMaxBytes = 1024 * 1024;
@@ -446,7 +613,8 @@ namespace mmkv
                 LZ4_freeStreamDecode(lz4StreamDecode);
                 return -1;
             }
-            const int decBytes = LZ4_decompress_safe_continue(lz4StreamDecode, in + inp_offset, decom_buf, cmp_bytes, messageMaxBytes);
+            const int decBytes = LZ4_decompress_safe_continue(lz4StreamDecode, in + inp_offset, decom_buf, cmp_bytes,
+                    messageMaxBytes);
             if (decBytes <= 0 || decBytes != orig_bytes)
             {
                 LZ4_freeStreamDecode(lz4StreamDecode);

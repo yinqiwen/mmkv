@@ -67,7 +67,7 @@ namespace mmkv
             return err;
         }
         bool found = false;
-        Object pivot_str(pivot);
+        Object pivot_str(pivot, true);
         StringList::iterator it = list->begin();
         while (it != list->end())
         {
@@ -147,9 +147,8 @@ namespace mmkv
         }
         return list->size();
     }
-    int MMKVImpl::LRange(DBID db, const Data& key, int start, int end, StringArray& vals)
+    int MMKVImpl::LRange(DBID db, const Data& key, int start, int end, const StringArrayResult& vals)
     {
-        vals.clear();
         int err = 0;
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         StringList* list = GetObject<StringList>(db, key, V_TYPE_LIST, false, err)();
@@ -170,9 +169,7 @@ namespace mmkv
         }
         for (int i = start; i <= end && (size_t)i < list->size(); i++)
         {
-            std::string str;
-            list->at(i).ToString(str);
-            vals.push_back(str);
+            list->at(i).ToString(vals.Get());
         }
         return 0;
     }
@@ -190,6 +187,7 @@ namespace mmkv
         {
             return err;
         }
+        Object val_obj(val, true);
         int actual_removed = 0;
         if (count >= 0)
         {
@@ -197,7 +195,7 @@ namespace mmkv
             while (it != list->end() && count > 0)
             {
                 const Object& data = *it;
-                if (data == val)
+                if (data == val_obj)
                 {
                     DestroyObjectContent(data);
                     it = list->erase(it);
@@ -216,7 +214,7 @@ namespace mmkv
             while (it != list->rend() && count < 0)
             {
                 const Object& data = *it;
-                if (data == val)
+                if (data == val_obj)
                 {
                     DestroyObjectContent(data);
                     it = StringList::reverse_iterator(list->erase(--it.base()));
@@ -290,7 +288,7 @@ namespace mmkv
         if (start > end || start >= llen)
         {
             /* Out of range start or start > end result in empty list */
-            GenericDel(GetMMKVTable(db, false), key);
+            GenericDel(GetMMKVTable(db, false), Object(key, true));
         }
         else
         {
@@ -396,6 +394,7 @@ namespace mmkv
         for (size_t i = 0; i < vals.size(); i++)
         {
             Object& data = list->at(old_size + i);
+            data.Clear();
             AssignObjectContent(data, vals[i], false);
         }
         return list->size();

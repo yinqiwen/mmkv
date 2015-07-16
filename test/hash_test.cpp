@@ -91,7 +91,7 @@ TEST(HIncr, Hash)
     CHECK_EQ(int, v, 200, "");
     CHECK_EQ(int, g_test_kv->HIncrBy(0, "myhash", "field1", -100, v), 0, "");
     CHECK_EQ(int, v, 100, "");
-    double dv;
+    long double dv;
     CHECK_EQ(int, g_test_kv->HIncrByFloat(0, "myhash", "field1", 1.2, dv), 0, "");
     CHECK_EQ(double, dv, 101.2, "");
     g_test_kv->Del(0, "myhash");

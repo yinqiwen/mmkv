@@ -121,8 +121,7 @@ void GTEST_TEST_CLASS_NAME_(test_case_name, test_name)::TestBody()
                         "[FAIL]", __FILE__,__LINE__,#cond1, #cmp, #cond2, __func__);      \
          std::stringstream ss; \
          ss << #cond1 << " == " << cond1_v << " NOT " << #cmp <<" value:" << cond2; \
-         std::string tmpstr; \
-         ss.str(tmpstr); \
+         std::string tmpstr = ss.str(); \
          fprintf(stderr, "\e[1;35m%-6s\e[m", "[FAIL]:"); \
          fprintf(stderr, "%s ", tmpstr.c_str()); \
          fprintf(stderr, __VA_ARGS__);\

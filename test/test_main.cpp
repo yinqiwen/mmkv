@@ -34,6 +34,8 @@
 #include "hyperloglog_test.cpp"
 #include "zset_test.cpp"
 #include "pod_test.cpp"
+#include "sort_test.cpp"
+#include "geo_test.cpp"
 #include "performance_test.cpp"
 #include "concurrent_test.cpp"
 #include "backup_test.cpp"

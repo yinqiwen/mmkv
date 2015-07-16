@@ -72,7 +72,7 @@ LIBS= ../deps/lz4/liblz4.a -lpthread
 
 
 COMMON_OBJECTS := mmkv.o mmkv_logger.o mmkv_impl.o malloc.o memory.o mmap.o locks.o t_string.o t_list.o t_hash.o t_zset.o t_set.o bitops.o utils.o \
-                  hyperloglog.o
+                  hyperloglog.o sort.o geo.o geohash.o 
 
 TESTOBJ := ../test/ut.o ../test/test_main.o
 
@@ -138,7 +138,7 @@ dist:lib
 	cp -f khash.hh ${DIST_PATH}/include/mmkv_containers;\
 	cp -rf ${LIB_PATH}/cpp-btree ${DIST_PATH}/include/mmkv_containers;\
 	cp -rf ${SPARSEHASH_PATH}/src/sparsehash ${DIST_PATH}/include/mmkv_containers;\
-	cp -f mmkv.hpp mmkv_logger.hpp mmkv_options.hpp mmkv_allocator.hpp  ${DIST_PATH}/include;\
+	cp -f mmkv.hpp mmkv_logger.hpp mmkv_options.hpp mmkv_allocator.hpp geohash.h ${DIST_PATH}/include;\
 	cp -f ${DIST_LIBA} ${DIST_PATH}/lib; cp -f ${LIB_PATH}/lz4/liblz4.a ${DIST_PATH}/lib
 	
 

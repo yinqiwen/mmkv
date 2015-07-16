@@ -46,7 +46,7 @@ namespace mmkv
         int removed = 0;
         for (size_t i = 0; i < fields.size(); i++)
         {
-            StringHashTable::iterator found = hash->find(fields[i]);
+            StringHashTable::iterator found = hash->find(Object(fields[i], true));
             if (found != hash->end())
             {
                 DestroyObjectContent(found->first);
@@ -70,7 +70,7 @@ namespace mmkv
         {
             return err;
         }
-        StringHashTable::iterator found = hash->find(field);
+        StringHashTable::iterator found = hash->find(Object(field, true));
         return found != hash->end();
     }
     int MMKVImpl::HGet(DBID db, const Data& key, const Data& field, std::string& val)
@@ -83,7 +83,7 @@ namespace mmkv
         {
             return err;
         }
-        StringHashTable::iterator found = hash->find(field);
+        StringHashTable::iterator found = hash->find(Object(field, true));
         if (found != hash->end())
         {
             found->second.ToString(val);
@@ -95,7 +95,7 @@ namespace mmkv
         }
 
     }
-    int MMKVImpl::HGetAll(DBID db, const Data& key, StringArray& vals)
+    int MMKVImpl::HGetAll(DBID db, const Data& key, const StringArrayResult& vals)
     {
         int err = 0;
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
@@ -104,17 +104,14 @@ namespace mmkv
         {
             return err;
         }
-        vals.clear();
+
         StringHashTable::iterator it = hash->begin();
         while (it != hash->end())
         {
             if (it.isfilled())
             {
-                std::string field, value;
-                it->first.ToString(field);
-                it->second.ToString(value);
-                vals.push_back(field);
-                vals.push_back(value);
+                it->first.ToString(vals.Get());
+                it->second.ToString(vals.Get());
             }
             it++;
         }
@@ -136,7 +133,7 @@ namespace mmkv
         {
             return err;
         }
-        std::pair<StringHashTable::iterator, bool> ret = hash->insert(StringHashTable::value_type(field, Object()));
+        std::pair<StringHashTable::iterator, bool> ret = hash->insert(StringHashTable::value_type(Object(field, true), Object()));
         if (ret.second)
         {
             m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), field, false);
@@ -158,7 +155,7 @@ namespace mmkv
         }
         return 0;
     }
-    int MMKVImpl::HIncrByFloat(DBID db, const Data& key, const Data& field, double increment, double& new_val)
+    int MMKVImpl::HIncrByFloat(DBID db, const Data& key, const Data& field, long double increment, long double& new_val)
     {
         if (m_readonly)
         {
@@ -174,7 +171,7 @@ namespace mmkv
             return err;
         }
         std::pair<StringHashTable::iterator, bool> ret = hash->insert(
-                StringHashTable::value_type(Object(field), Object()));
+                StringHashTable::value_type(Object(field, true), Object()));
         if (ret.second)
         {
             m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), field, false);
@@ -221,7 +218,7 @@ namespace mmkv
         }
         return 0;
     }
-    int MMKVImpl::HKeys(DBID db, const Data& key, StringArray& fields)
+    int MMKVImpl::HKeys(DBID db, const Data& key, const StringArrayResult& fields)
     {
         int err = 0;
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
@@ -230,15 +227,12 @@ namespace mmkv
         {
             return err;
         }
-        fields.clear();
         StringHashTable::iterator it = hash->begin();
         while (it != hash->end())
         {
             if (it.isfilled())
             {
-                std::string field;
-                it->first.ToString(field);
-                fields.push_back(field);
+                it->first.ToString(fields.Get());
             }
             it++;
         }
@@ -259,7 +253,7 @@ namespace mmkv
         }
         return hash->size();
     }
-    int MMKVImpl::HMGet(DBID db, const Data& key, const DataArray& fields, StringArray& vals)
+    int MMKVImpl::HMGet(DBID db, const Data& key, const DataArray& fields, const StringArrayResult& vals)
     {
         int err = 0;
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
@@ -270,13 +264,12 @@ namespace mmkv
         }
         for (size_t i = 0; i < fields.size(); i++)
         {
-            StringHashTable::iterator found = hash->find(fields[i]);
-            std::string val;
+            StringHashTable::iterator found = hash->find(Object(fields[i], true));
+            std::string& val = vals.Get();
             if (found != hash->end())
             {
                 found->second.ToString(val);
             }
-            vals.push_back(val);
         }
         return 0;
     }
@@ -298,8 +291,8 @@ namespace mmkv
         }
         for (size_t i = 0; i < field_vals.size(); i++)
         {
-            Object tmpk(field_vals[i].first);
-            Object tmpv(field_vals[i].second);
+            Object tmpk(field_vals[i].first, true);
+            Object tmpv(field_vals[i].second, true);
             std::pair<StringHashTable::iterator, bool> ret = hash->insert(StringHashTable::value_type(tmpk, tmpv));
             if (ret.second)
             {
@@ -313,9 +306,39 @@ namespace mmkv
         }
         return 0;
     }
-    int MMKVImpl::HScan(DBID db, const Data& key, int cursor, const std::string& pattern, int32_t limit_count)
+    int64_t MMKVImpl::HScan(DBID db, const Data& key, int64_t cursor, const std::string& pattern, int32_t limit_count, const StringArrayResult& results)
     {
-        return -1;
+        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
+        int err;
+        StringHashTable* hash = GetObject<StringHashTable>(db, key, V_TYPE_HASH, false, err)();
+        if (NULL == hash || 0 != err)
+        {
+            return err;
+        }
+        int match_count = 0;
+        StringHashTable::iterator it = hash->begin();
+        it.advance(cursor >= hash->capacity() ? hash->capacity() : cursor);
+        while (it != hash->end())
+        {
+            if (it.isfilled())
+            {
+                std::string key_str;
+                it->first.ToString(key_str);
+                if (pattern == ""
+                        || stringmatchlen(pattern.c_str(), pattern.size(), key_str.c_str(), key_str.size(), 0) == 1)
+                {
+                    std::string& ss = results.Get();
+                    ss = key_str;
+                    match_count++;
+                    if (limit_count > 0 && match_count >= limit_count)
+                    {
+                        break;
+                    }
+                }
+            }
+            it++;
+        }
+        return it.pos();
     }
     int MMKVImpl::HSet(DBID db, const Data& key, const Data& field, const Data& val, bool nx)
     {
@@ -332,8 +355,8 @@ namespace mmkv
         {
             return err;
         }
-        Object tmpk(field);
-        Object tmpv(val);
+        Object tmpk(field, true);
+        Object tmpv(val, true);
         std::pair<StringHashTable::iterator, bool> ret = hash->insert(StringHashTable::value_type(tmpk, tmpv));
         if (ret.second)
         {
@@ -363,14 +386,14 @@ namespace mmkv
         {
             return err;
         }
-        StringHashTable::iterator found = hash->find(field);
+        StringHashTable::iterator found = hash->find(Object(field, true));
         if (found != hash->end())
         {
             return found->second.len;
         }
         return 0;
     }
-    int MMKVImpl::HVals(DBID db, const Data& key, StringArray& vals)
+    int MMKVImpl::HVals(DBID db, const Data& key, const StringArrayResult& vals)
     {
         int err = 0;
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
@@ -379,15 +402,12 @@ namespace mmkv
         {
             return err;
         }
-        vals.clear();
         StringHashTable::iterator it = hash->begin();
         while (it != hash->end())
         {
             if (it.isfilled())
             {
-                std::string value;
-                it->second.ToString(value);
-                vals.push_back(value);
+                it->second.ToString(vals.Get());
             }
             it++;
         }

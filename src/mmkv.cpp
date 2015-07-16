@@ -30,6 +30,32 @@
 
 namespace mmkv
 {
+    static std::string& StringArrayStrAlloc(void* data)
+    {
+        StringArray* array = (StringArray*) data;
+        std::string str;
+        array->push_back(str);
+        return *(array->rbegin());
+    }
+    StringArrayResult::StringArrayResult(StringArray& ss) :
+            alloc(StringArrayStrAlloc), cbdata(&ss)
+    {
+        ss.clear();
+    }
+
+    StringArrayResult::StringArrayResult() :
+            alloc(NULL), cbdata(NULL)
+    {
+    }
+    StringArrayResult::StringArrayResult(ResultStringAlloc* ac, void* data) :
+            alloc(ac), cbdata(data)
+    {
+    }
+    std::string& StringArrayResult::Get() const
+    {
+        return alloc(cbdata);
+    }
+
     int MMKV::Open(const OpenOptions& open_options, MMKV*& kv)
     {
         MMKVImpl* ptr = new MMKVImpl;

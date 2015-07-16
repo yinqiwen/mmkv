@@ -41,13 +41,13 @@
 #define AGGREGATE_MAX 3
 namespace mmkv
 {
-    void MMKVImpl::AssignScoreValue(ScoreValue& sv, double score, const Data& value)
+    void MMKVImpl::AssignScoreValue(ScoreValue& sv, long double score, const Data& value)
     {
         AssignObjectContent(sv.value, value, false);
         sv.score = score;
         return;
     }
-    static inline int update_zset_score(ZSet& zset, const Object& value, double score, double new_score)
+    int MMKVImpl::UpdateZSetScore(ZSet& zset, const Object& value, long double score, long double new_score)
     {
         ScoreValue tmp;
         tmp.value = value;
@@ -87,7 +87,7 @@ namespace mmkv
         int modified = 0;
         for (size_t i = 0; i < vals.size(); i++)
         {
-            Object tmpk(vals[i].value);
+            Object tmpk(vals[i].value, true);
             std::pair<StringDoubleTable::iterator, bool> ret = zset->scores.insert(
                     StringDoubleTable::value_type(tmpk, vals[i].score));
             if (ret.second)
@@ -109,7 +109,7 @@ namespace mmkv
                 {
                     continue;
                 }
-                double new_score = vals[i].score;
+                long double new_score = vals[i].score;
                 if (incr)
                 {
                     new_score += ret.first.value();
@@ -126,7 +126,7 @@ namespace mmkv
                 {
                     modified++;
                 }
-                if (0 == update_zset_score(*zset, vals[i].value, ret.first.value(), new_score))
+                if (0 == UpdateZSetScore(*zset, Object(vals[i].value, true), ret.first.value(), new_score))
                 {
                     ret.first.value(new_score);
                 }
@@ -149,12 +149,7 @@ namespace mmkv
         }
         return zset->size();
     }
-    /* Struct to hold a inclusive/exclusive range spec by score comparison. */
-    typedef struct
-    {
-            double min, max;
-            int minex, maxex; /* are min or max exclusive? */
-    } zrangespec;
+
     /* Populate the rangespec according to the objects min and max. */
     static int zslParseRange(const std::string& min, const std::string& max, zrangespec *spec)
     {
@@ -304,7 +299,7 @@ namespace mmkv
         int max_rank = btree_rank(zset->set, max_it);
         return max_rank - min_rank + 1;
     }
-    int MMKVImpl::ZIncrBy(DBID db, const Data& key, double increment, const Data& member, double& new_score)
+    int MMKVImpl::ZIncrBy(DBID db, const Data& key, long double increment, const Data& member, long double& new_score)
     {
         if (m_readonly)
         {
@@ -321,7 +316,7 @@ namespace mmkv
         {
             return err;
         }
-        Object tmpk(member);
+        Object tmpk(member, true);
         std::pair<StringDoubleTable::iterator, bool> ret = zset->scores.insert(
                 StringDoubleTable::value_type(tmpk, increment));
         if (ret.second)
@@ -334,7 +329,7 @@ namespace mmkv
         }
         else
         {
-            update_zset_score(*zset, member, ret.first.value(), ret.first.value() + increment);
+            UpdateZSetScore(*zset, tmpk, ret.first.value(), ret.first.value() + increment);
             ret.first.value(ret.first.value() + increment);
             new_score = ret.first.value();
         }
@@ -447,11 +442,9 @@ namespace mmkv
         }
         ScoreValue sv;
         sv.score = zset->set.begin()->score;
-        sv.value = range.min;
-
-        Object min_cstr(range.min);
-        Object max_cstr(range.min);
-
+        Object min_cstr(range.min, false);
+        Object max_cstr(range.max, false);
+        sv.value = min_cstr;
         SortedSet::iterator min_it = range.min_empty_type == -1 ? zset->set.begin() : zset->set.lower_bound(sv);
         while (min_it != zset->set.end())
         {
@@ -465,7 +458,7 @@ namespace mmkv
                 break;
             }
         }
-        sv.value = range.max;
+        sv.value = max_cstr;
         SortedSet::iterator max_it = range.max_empty_type == 1 ? zset->set.end() : zset->set.lower_bound(sv);
         if (max_it == zset->set.end())
         {
@@ -485,12 +478,12 @@ namespace mmkv
         }
         int min_rank = btree_rank(zset->set, min_it);
         int max_rank = btree_rank(zset->set, max_it);
+
         return max_rank - min_rank + 1;
     }
-    int MMKVImpl::ZRange(DBID db, const Data& key, int start, int end, bool with_scores, StringArray& vals)
+    int MMKVImpl::ZRange(DBID db, const Data& key, int start, int end, bool with_scores, const StringArrayResult& vals)
     {
         int err;
-        vals.clear();
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         ZSet* zset = GetObject<ZSet>(db, key, V_TYPE_ZSET, false, err)();
         if (IS_NOT_EXISTS(err))
@@ -525,20 +518,19 @@ namespace mmkv
         for (int i = start; i <= end; i++, it++)
         {
             ScoreValue& sv = *it;
-            std::string tmp;
-            sv.value.ToString(tmp);
-            vals.push_back(tmp);
+            sv.value.ToString(vals.Get());
             if (with_scores)
             {
+                std::string& ss = vals.Get();
                 char buf[256];
-                snprintf(buf, sizeof(buf), "%.17g", sv.score);
-                vals.push_back(buf);
+                snprintf(buf, sizeof(buf), "%.17Lg", sv.score);
+                ss = buf;
             }
         }
         return 0;
     }
     int MMKVImpl::ZRangeByLex(DBID db, const Data& key, const std::string& min, const std::string& max,
-            int limit_offset, int limit_count, StringArray& vals)
+            int limit_offset, int limit_count, const StringArrayResult& vals)
     {
         zlexrangespec range;
         int err = 0;
@@ -547,7 +539,6 @@ namespace mmkv
         {
             return err;
         }
-        vals.clear();
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         ZSet* zset = GetObject<ZSet>(db, key, V_TYPE_ZSET, false, err)();
         if (IS_NOT_EXISTS(err))
@@ -564,17 +555,18 @@ namespace mmkv
         }
         ScoreValue sv;
         sv.score = zset->set.begin()->score;
-        sv.value = range.min;
-        Object min_cstr(range.min);
-        Object max_cstr(range.max);
+        Object min_cstr(range.min, false);
+        Object max_cstr(range.max, false);
+        sv.value = min_cstr;
         SortedSet::iterator min_it = range.min_empty_type == -1 ? zset->set.begin() : zset->set.lower_bound(sv);
         if (limit_offset > 0)
         {
             min_it.increment_by(limit_offset);
         }
+        size_t count = 0;
         while (min_it != zset->set.end())
         {
-            if (limit_count > 0 && vals.size() >= (size_t)limit_count)
+            if (limit_count > 0 && count >= (size_t) limit_count)
             {
                 break;
             }
@@ -590,16 +582,15 @@ namespace mmkv
             }
             else
             {
-                std::string tmpstr;
-                tmp.value.ToString(tmpstr);
-                vals.push_back(tmpstr);
+                tmp.value.ToString(vals.Get());
                 min_it++;
+                count++;
             }
         }
         return 0;
     }
     int MMKVImpl::ZRangeByScore(DBID db, const Data& key, const std::string& min, const std::string& max,
-            bool with_scores, int limit_offset, int limit_count, StringArray& vals)
+            bool with_scores, int limit_offset, int limit_count, const StringArrayResult& vals)
     {
         zrangespec spec;
         int err = zslParseRange(min, max, &spec);
@@ -607,7 +598,6 @@ namespace mmkv
         {
             return err;
         }
-        vals.clear();
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         ZSet* zset = GetObject<ZSet>(db, key, V_TYPE_ZSET, false, err)();
         if (IS_NOT_EXISTS(err))
@@ -649,14 +639,13 @@ namespace mmkv
                 break;
             }
             value_count++;
-            std::string tmp;
-            sv.value.ToString(tmp);
-            vals.push_back(tmp);
+            sv.value.ToString(vals.Get());
             if (with_scores)
             {
                 char buf[256];
-                snprintf(buf, sizeof(buf), "%.17g", sv.score);
-                vals.push_back(buf);
+                snprintf(buf, sizeof(buf), "%.17Lg", sv.score);
+                std::string& ss = vals.Get();
+                ss = buf;
             }
             min_it++;
         }
@@ -672,13 +661,14 @@ namespace mmkv
         {
             return err;
         }
-        StringDoubleTable::iterator found = zset->scores.find(member);
+        Object member_obj(member, true);
+        StringDoubleTable::iterator found = zset->scores.find(member_obj);
         if (found == zset->scores.end())
         {
             return ERR_ENTRY_NOT_EXIST;
         }
         ScoreValue sv;
-        sv.value = member;
+        sv.value = member_obj;
         sv.score = found.value();
         SortedSet::iterator fit = zset->set.find(sv);
         if (fit == zset->set.end())
@@ -708,14 +698,15 @@ namespace mmkv
         size_t removed = 0;
         for (size_t i = 0; i < members.size(); i++)
         {
-            StringDoubleTable::iterator found = zset->scores.find(members[i]);
+            Object mem_obj(members[i], true);
+            StringDoubleTable::iterator found = zset->scores.find(mem_obj);
             if (found == zset->scores.end())
             {
                 continue;
             }
             ScoreValue tmp;
             tmp.score = found.value();
-            tmp.value = members[i];
+            tmp.value = mem_obj;
             SortedSet::iterator fit = zset->set.find(tmp);
             if (fit == zset->set.end())
             {
@@ -758,9 +749,9 @@ namespace mmkv
         }
         ScoreValue sv;
         sv.score = zset->set.begin()->score;
-        sv.value = range.min;
-        Object min_cstr(range.min);
-        Object max_cstr(range.max);
+        Object min_cstr(range.min, true);
+        Object max_cstr(range.max, true);
+        sv.value = min_cstr;
         SortedSet::iterator min_it = range.min_empty_type == -1 ? zset->set.begin() : zset->set.lower_bound(sv);
         size_t removed = 0;
         while (min_it != zset->set.end())
@@ -880,10 +871,9 @@ namespace mmkv
         }
         return remove_count;
     }
-    int MMKVImpl::ZRevRange(DBID db, const Data& key, int start, int end, bool with_scores, StringArray& vals)
+    int MMKVImpl::ZRevRange(DBID db, const Data& key, int start, int end, bool with_scores, const StringArrayResult& vals)
     {
         int err;
-        vals.clear();
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         ZSet* zset = GetObject<ZSet>(db, key, V_TYPE_ZSET, false, err)();
         if (IS_NOT_EXISTS(err))
@@ -922,20 +912,19 @@ namespace mmkv
         for (int i = end; i >= start; i--, it--)
         {
             ScoreValue& sv = *it;
-            std::string tmp;
-            sv.value.ToString(tmp);
-            vals.push_back(tmp);
+            sv.value.ToString(vals.Get());
             if (with_scores)
             {
                 char buf[256];
-                snprintf(buf, sizeof(buf), "%.17g", sv.score);
-                vals.push_back(buf);
+                snprintf(buf, sizeof(buf), "%.17Lg", sv.score);
+                std::string& ss = vals.Get();
+                ss = buf;
             }
         }
         return 0;
     }
     int MMKVImpl::ZRevRangeByLex(DBID db, const Data& key, const std::string& max, const std::string& min,
-            int limit_offset, int limit_count, StringArray& vals)
+            int limit_offset, int limit_count, const StringArrayResult& vals)
     {
         zlexrangespec range;
         int err = 0;
@@ -960,9 +949,9 @@ namespace mmkv
         }
         ScoreValue sv;
         sv.score = zset->set.begin()->score;
-        sv.value = range.max;
-        Object min_cstr(range.min);
-        Object max_cstr(range.max);
+        Object min_cstr(range.min, true);
+        Object max_cstr(range.max, true);
+        sv.value = max_cstr;
 
         SortedSet::iterator max_it = range.max_empty_type == 1 ? zset->set.end() : zset->set.lower_bound(sv);
         if (max_it == zset->set.end())
@@ -971,7 +960,7 @@ namespace mmkv
         }
         while (range.maxex)
         {
-            if (max_it->value == range.max && max_it != zset->set.begin())
+            if (max_it->value == max_cstr && max_it != zset->set.begin())
             {
                 max_it--;
             }
@@ -985,7 +974,7 @@ namespace mmkv
         if (limit_offset > 0)
         {
             size_t max_rank = btree_rank(zset->set, max_it);
-            if (max_rank < (size_t)limit_offset)
+            if (max_rank < (size_t) limit_offset)
             {
                 return 0;
             }
@@ -1009,10 +998,7 @@ namespace mmkv
                 break;
             }
             value_count++;
-            std::string tmp;
-            sv.value.ToString(tmp);
-            vals.push_back(tmp);
-
+            sv.value.ToString(vals.Get());
             if (sit == zset->set.begin())
             {
                 break;
@@ -1022,7 +1008,7 @@ namespace mmkv
         return 0;
     }
     int MMKVImpl::ZRevRangeByScore(DBID db, const Data& key, const std::string& max, const std::string& min,
-            bool with_scores, int limit_offset, int limit_count, StringArray& vals)
+            bool with_scores, int limit_offset, int limit_count, const StringArrayResult& vals)
     {
         zrangespec spec;
         int err = zslParseRange(min, max, &spec);
@@ -1030,7 +1016,6 @@ namespace mmkv
         {
             return err;
         }
-        vals.clear();
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         ZSet* zset = GetObject<ZSet>(db, key, V_TYPE_ZSET, false, err)();
         if (IS_NOT_EXISTS(err))
@@ -1067,7 +1052,7 @@ namespace mmkv
         if (limit_offset > 0)
         {
             size_t max_rank = btree_rank(zset->set, max_it);
-            if (max_rank < (size_t)limit_offset)
+            if (max_rank < (size_t) limit_offset)
             {
                 return 0;
             }
@@ -1092,14 +1077,13 @@ namespace mmkv
             }
 
             value_count++;
-            std::string tmp;
-            sv.value.ToString(tmp);
-            vals.push_back(tmp);
+            sv.value.ToString(vals.Get());
             if (with_scores)
             {
                 char buf[256];
-                snprintf(buf, sizeof(buf), "%.17g", sv.score);
-                vals.push_back(buf);
+                snprintf(buf, sizeof(buf), "%.17Lg", sv.score);
+                std::string& ss = vals.Get();
+                ss = buf;
             }
             if (sit == zset->set.begin())
             {
@@ -1118,13 +1102,14 @@ namespace mmkv
         {
             return err;
         }
-        StringDoubleTable::iterator found = zset->scores.find(member);
+        Object member_obj(member, true);
+        StringDoubleTable::iterator found = zset->scores.find(member_obj);
         if (found == zset->scores.end())
         {
             return ERR_ENTRY_NOT_EXIST;
         }
         ScoreValue sv;
-        sv.value = member;
+        sv.value = member_obj;
         sv.score = found.value();
         SortedSet::iterator fit = zset->set.find(sv);
         if (fit == zset->set.end())
@@ -1133,7 +1118,7 @@ namespace mmkv
         }
         return zset->set.size() - btree_rank(zset->set, fit) - 1;
     }
-    int MMKVImpl::ZScore(DBID db, const Data& key, const Data& member, double& score)
+    int MMKVImpl::ZScore(DBID db, const Data& key, const Data& member, long double& score)
     {
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
@@ -1143,7 +1128,7 @@ namespace mmkv
         {
             return err;
         }
-        StringDoubleTable::iterator found = zset->scores.find(member);
+        StringDoubleTable::iterator found = zset->scores.find(Object(member, true));
         if (found == zset->scores.end())
         {
             return ERR_ENTRY_NOT_EXIST;
@@ -1151,9 +1136,46 @@ namespace mmkv
         score = found.value();
         return 0;
     }
-    int MMKVImpl::ZScan(DBID db, const Data& key, int cursor, const std::string& pattern, int32_t limit_count)
+    int64_t MMKVImpl::ZScan(DBID db, const Data& key, int64_t cursor, const std::string& pattern, int32_t limit_count,
+            const StringArrayResult& vals)
     {
-        return -1;
+        int err = 0;
+        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
+        ZSet* zset = GetObject<ZSet>(db, key, V_TYPE_ZSET, false, err)();
+        if (0 != err)
+        {
+            return err;
+        }
+        SortedSet::iterator it = zset->set.begin();
+        if (cursor >= zset->set.size())
+        {
+            return 0;
+        }
+        it.increment_by(cursor);
+        int match_count = 0;
+        while (it != zset->set.end())
+        {
+            std::string key_str;
+            it->value.ToString(key_str);
+            if (pattern == ""
+                    || stringmatchlen(pattern.c_str(), pattern.size(), key_str.c_str(), key_str.size(), 0) == 1)
+            {
+                std::string& ss1 = vals.Get();
+                ss1 = key_str;
+                char score_str[256];
+                snprintf(score_str, sizeof(score_str), "%.17Lg", it->score);
+                std::string& score_string =  vals.Get();;
+                score_string = score_str;
+                match_count++;
+                if (limit_count > 0 && match_count >= limit_count)
+                {
+                    break;
+                }
+            }
+            cursor++;
+            it++;
+        }
+        return it != zset->set.end() ? cursor : 0;
     }
 
     static inline size_t SetLen(Object* set)
@@ -1171,7 +1193,7 @@ namespace mmkv
         return ss->size();
     }
 
-    static void aggregate_score(int aggregate_type, double current_score, double& score)
+    static void aggregate_score(int aggregate_type, long double current_score, double& score)
     {
         switch (aggregate_type)
         {
@@ -1286,7 +1308,7 @@ namespace mmkv
                     StringSet::iterator it = ss->begin();
                     while (it != ss->end())
                     {
-                        double current_score = weights.empty() ? 1.0 : weights[i] * 1.0;
+                        long double current_score = weights.empty() ? 1.0 : weights[i] * 1.0;
                         std::pair<StdObjectScoreTable::iterator, bool> ret = cache_result.insert(
                                 StdObjectScoreTable::value_type(*it, current_score));
                         if (ret.second)
@@ -1310,7 +1332,7 @@ namespace mmkv
                         }
                         else
                         {
-                            double current_score = weights.empty() ? 1.0 : weights[i] * 1.0;
+                            long double current_score = weights.empty() ? 1.0 : weights[i] * 1.0;
                             aggregate_score(aggregate_type, current_score, sit->second);
                             sit++;
                         }
@@ -1325,7 +1347,7 @@ namespace mmkv
                     SortedSet::iterator it = ss->set.begin();
                     while (it != ss->set.end())
                     {
-                        double current_score = weights.empty() ? it->score : weights[i] * it->score;
+                        long double current_score = weights.empty() ? it->score : weights[i] * it->score;
                         std::pair<StdObjectScoreTable::iterator, bool> ret = cache_result.insert(
                                 StdObjectScoreTable::value_type(it->value, current_score));
                         if (ret.second)
@@ -1351,7 +1373,7 @@ namespace mmkv
                         }
                         else
                         {
-                            double current_score = weights.empty() ? ssit.value() : weights[i] * ssit.value();
+                            long double current_score = weights.empty() ? ssit.value() : weights[i] * ssit.value();
                             aggregate_score(aggregate_type, current_score, sit->second);
                             sit++;
                         }

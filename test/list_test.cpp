@@ -53,17 +53,22 @@ TEST(LRange, List)
     CHECK_EQ(int, g_test_kv->LRange(0, "mylist", 0, 0, vs), 0, "");
     CHECK_EQ(int, vs.size(), 1, "");
     CHECK_EQ(std::string, vs[0], "one", "");
+
+    vs.clear();
     CHECK_EQ(int, g_test_kv->LRange(0, "mylist", -3, 3, vs), 0, "");
     CHECK_EQ(int, vs.size(), 3, "");
     CHECK_EQ(std::string, vs[0], "one", "");
     CHECK_EQ(std::string, vs[1], "two", "");
     CHECK_EQ(std::string, vs[2], "three", "");
 
+    vs.clear();
     CHECK_EQ(int, g_test_kv->LRange(0, "mylist", -100, 100, vs), 0, "");
     CHECK_EQ(int, vs.size(), 3, "");
     CHECK_EQ(std::string, vs[0], "one", "");
     CHECK_EQ(std::string, vs[1], "two", "");
     CHECK_EQ(std::string, vs[2], "three", "");
+
+    vs.clear();
     CHECK_EQ(int, g_test_kv->LRange(0, "mylist", 5, 10, vs), 0, "");
 }
 
@@ -112,6 +117,7 @@ TEST(LRem, List)
     CHECK_EQ(int, g_test_kv->RPush(0, "mylist", "hello"), 4, "");
 
     CHECK_EQ(int, g_test_kv->LRem(0, "mylist", 2, "hello"), 2, "");
+    vs.clear();
     CHECK_EQ(int, g_test_kv->LRange(0, "mylist", 0, -1, vs), 0, "");
     CHECK_EQ(int, vs.size(), 2, "");
     CHECK_EQ(std::string, vs[0], "foo", "");

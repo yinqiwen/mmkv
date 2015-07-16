@@ -149,37 +149,6 @@ namespace mmkv
             }
     };
 
-    enum ErrCode
-    {
-        ERR_ENTRY_NOT_EXIST = -1000,
-        ERR_DB_NOT_EXIST = -1001,
-        ERR_PERMISSION_DENIED = -1002,
-        ERR_INVALID_TYPE = -1003,
-        ERR_ENTRY_EXISTED = -1004,
-        ERR_NOT_INTEGER = -1005,
-        ERR_NOT_NUMBER = -1006,
-        ERR_INVALID_NUMBER = -1007,
-        ERR_OFFSET_OUTRANGE = -1008,
-        ERR_BIT_OUTRANGE = -1009,
-        ERR_SYNTAX_ERROR = 1010,
-        ERR_ARGS_EXCEED_LIMIT = 1011,
-        ERR_NOT_HYPERLOGLOG_STR = -1012,
-        ERR_CORRUPTED_HLL_VALUE = -1013,
-        ERR_NOT_IMPLEMENTED = -1014,
-        ERR_INVALID_MIN_MAX = -1015,
-        ERR_POD_SIZE_MISMATCH = -1016,
-        ERR_SIZE_MISMATCH = -1017,
-        ERR_INVALID_ARGS = -1018,
-        ERR_NO_DESTRUCTOR = -1019,
-        ERR_INVALID_POD_TYPE = -1020,
-        ERR_DUPLICATE_POD_TYPE = -1021,
-    };
-
-    enum ObjectType
-    {
-        V_TYPE_STRING = 0, V_TYPE_HASH = 1, V_TYPE_SET = 2, V_TYPE_ZSET = 3, V_TYPE_LIST = 4, V_TYPE_POD = 5
-    };
-
     struct Object
     {
             char data[8];
@@ -204,32 +173,20 @@ namespace mmkv
                     memcpy(data, other.data, 8);
                 }
             }
-            inline Object(const Data& v) :
+            inline void SetData(const Data& v, bool try_int_encoding)
+            {
+                if (try_int_encoding && SetInteger(v))
+                {
+                    return;
+                }
+                *(void**) data = (void*) v.data;
+                encoding = OBJ_ENCODING_PTR;
+                len = v.len;
+            }
+            inline Object(const Data& v, bool try_int_encoding) :
                     type(V_TYPE_STRING), encoding(OBJ_ENCODING_PTR), hasttl(0), len(v.len)
             {
-                if (v.data == NULL)
-                {
-                    SetInteger((int64_t) v.len);
-                }
-                else
-                {
-                    *(void**) data = (void*) v.data;
-                }
-            }
-            inline Object(const void* v, size_t length) :
-                    type(V_TYPE_STRING), encoding(OBJ_ENCODING_PTR), hasttl(0), len(length)
-            {
-                *(void**) data = (void*) v;
-            }
-            inline Object(const char* ss) :
-                    type(V_TYPE_STRING), encoding(OBJ_ENCODING_PTR), hasttl(0), len(strlen(ss))
-            {
-                *(void**) data = (void*) ss;
-            }
-            inline Object(const std::string& ss) :
-                    type(V_TYPE_STRING), encoding(OBJ_ENCODING_PTR), hasttl(0), len(ss.size())
-            {
-                *(void**) data = (void*) ss.data();
+                SetData(v, try_int_encoding);
             }
             inline Object& operator=(const Object& other)
             {
@@ -253,6 +210,7 @@ namespace mmkv
                 *(boost::interprocess::offset_ptr<void>*) data = (void*) v;
                 encoding = OBJ_ENCODING_OFFSET_PTR;
             }
+
             inline const char* RawValue() const
             {
                 switch (encoding)
@@ -317,6 +275,24 @@ namespace mmkv
                 encoding = OBJ_ENCODING_INT;
                 return true;
             }
+            inline bool SetInteger(const Data& v)
+            {
+                if (v.data == NULL)
+                {
+                    SetInteger((int64_t) v.len);
+                    return true;
+                }
+                else
+                {
+                    long long int_val;
+                    if (v.Len() <= 21 && string2ll(v.Value(), v.Len(), &int_val))
+                    {
+                        SetInteger((int64_t) int_val);
+                        return true;
+                    }
+                }
+                return false;
+            }
 
             inline bool ToString(std::string& str) const
             {
@@ -345,26 +321,38 @@ namespace mmkv
                     }
                 }
             }
-            inline int Compare(const Object& right) const
+            inline int Compare(const Object& right, bool alpha_cmp = false) const
             {
                 assert(type == V_TYPE_STRING && right.type == V_TYPE_STRING);
-                if (IsInteger() && right.IsInteger())
+                if (!alpha_cmp)
                 {
-                    return IntegerValue() - right.IntegerValue();
+                    if (IsInteger() && right.IsInteger())
+                    {
+                        return IntegerValue() - right.IntegerValue();
+                    }
+                    //integer is always less than text value in non alpha comparator
+                    if (IsInteger())
+                    {
+                        return -1;
+                    }
+                    if (right.IsInteger())
+                    {
+                        return 1;
+                    }
                 }
                 size_t min_len = len < right.len ? len : right.len;
                 const char* other_raw_data = right.RawValue();
                 const char* raw_data = RawValue();
                 if (encoding == OBJ_ENCODING_INT)
                 {
-                    char* data_buf = (char*) alloca(right.len);
+                    char* data_buf = (char*) alloca(len);
                     ll2string(data_buf, len, IntegerValue());
                     raw_data = data_buf;
                 }
                 if (right.encoding == OBJ_ENCODING_INT)
                 {
                     char* data_buf = (char*) alloca(right.len);
-                    ll2string(data_buf, len, right.IntegerValue());
+                    ll2string(data_buf, right.len, right.IntegerValue());
                     other_raw_data = data_buf;
                 }
                 int ret = memcmp(raw_data, other_raw_data, min_len);
@@ -385,6 +373,13 @@ namespace mmkv
             inline bool operator <(const Object& s1) const
             {
                 return Compare(s1) < 0;
+            }
+            inline void Clear()
+            {
+                type = V_TYPE_STRING;
+                encoding = OBJ_ENCODING_RAW;
+                hasttl = 0;
+                len = 0;
             }
     };
 
@@ -475,7 +470,7 @@ namespace mmkv
 
     struct ScoreValue
     {
-            double score;
+            long double score;
             Object value;
             ScoreValue() :
                     score(0)
@@ -491,7 +486,7 @@ namespace mmkv
                 {
                     return 1;
                 }
-                return value.Compare(v2.value);
+                return value.Compare(v2.value, true);
             }
             bool operator<(const ScoreValue& right) const
             {

@@ -391,6 +391,10 @@ class __ac_hash_base_iterator
         {
             --i;
         }
+        inline void advance(khashint_t n)
+        {
+            i += n;
+        }
         inline bool isfilled() const
         {
             return !__ac_isboth(flags, i);
@@ -594,6 +598,10 @@ class __ac_hash_base_class
         /** get n_size */
         inline khashint_t size(void) const
         {   return n_size;};
+        inline khashint_t capacity() const
+        {
+            return n_capacity;
+        }
         /** get n_capacity */
         inline khashint_t bucket_count(void) const
         {   return n_capacity;};

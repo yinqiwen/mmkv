@@ -31,6 +31,10 @@
 #define OPTIONS_HPP_
 
 #include "mmkv_logger.hpp"
+#include <map>
+#include <vector>
+#define GEO_SEARCH_WITH_DISTANCES "WITHDISTANCES"
+#define GEO_SEARCH_WITH_COORDINATES "WITHCOORDINATES"
 namespace mmkv
 {
     struct CreateOptions
@@ -40,7 +44,8 @@ namespace mmkv
             bool autoexpand;
             int64_t ensure_space_size;
             CreateOptions() :
-                    size(1024 * 1024 * 1024), keyspace_factor(0.25), autoexpand(false), ensure_space_size(512 * 1024 * 1024)
+                    size(1024 * 1024 * 1024), keyspace_factor(0.25), autoexpand(false), ensure_space_size(
+                            512 * 1024 * 1024)
             {
             }
     };
@@ -60,6 +65,29 @@ namespace mmkv
                     dir("./mmkv"), readonly(false), verify(true), reserve_keyspace(false), reserve_valuespace(false), use_lock(
                             false), create_if_notexist(false), log_level(INFO_LOG_LEVEL), log_func(
                     NULL)
+            {
+            }
+    };
+
+    struct GeoSearchOptions
+    {
+            std::string coord_type;
+            bool asc;   //sort by asc
+            uint32_t radius;  //range meters
+            int32_t offset;
+            int32_t limit;
+
+            double by_x;
+            double by_y;
+            std::string by_member;
+
+            typedef std::map<std::string, std::string> PatternMap;
+            typedef std::vector<std::string> PatternArray;
+            PatternMap includes;
+            PatternMap excludes;
+            PatternArray get_patterns;
+            GeoSearchOptions() :
+                    coord_type("mercator"), asc(true), radius(0), offset(0), limit(0), by_x(0), by_y(0)
             {
             }
     };

@@ -170,6 +170,14 @@ namespace mmkv
             return -1;
         }
         m_global_lock = (MMLock*) locks_buf.buf;
+        if (open_options.verify)
+        {
+            if (!Verify())
+            {
+                return -1;
+            }
+        }
+
         if (!m_global_lock->inited)
         {
             m_global_lock->inited = 1;
@@ -260,7 +268,7 @@ namespace mmkv
         }
         Meta* meta = (Meta*) m_data_buf;
         size_t top_size = mspace_top_size((char*) (meta) + meta->valuespace_offset);
-        if(top_size < space_size)
+        if (top_size < space_size)
         {
             size_t new_size = meta->file_size * 2;
             return Expand(new_size);
@@ -340,13 +348,18 @@ namespace mmkv
         return true;
     }
 
-    bool MemorySegmentManager::AssignObjectValue(Object& obj, const Data& value, bool in_keyspace,
-            bool try_int_encoding)
+    bool MemorySegmentManager::AssignObjectValue(Object& obj, const Data& value, bool in_keyspace)
     {
-        long long int_val;
-        if (try_int_encoding && !in_keyspace && value.Len() <= 21 && string2ll(value.Value(), value.Len(), &int_val))
+        if (obj.IsInteger())
         {
-            return obj.SetInteger(int_val);
+            return true;
+        }
+        if(!in_keyspace) //try int encoding in value space
+        {
+            if(obj.SetInteger(value))
+            {
+                return true;
+            }
         }
         if (value.Len() <= 8 || value.Value() == NULL)
         {
@@ -460,6 +473,7 @@ namespace mmkv
         {
             if (kill(m_global_lock->writing_pid, 0) != 0)
             {
+                ERROR_LOG("Old write process crashed while writing.");
                 return false;
             }
         }

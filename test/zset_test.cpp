@@ -38,7 +38,7 @@ TEST(ZAddCardScoreRange, ZSet)
     CHECK_EQ(int, g_test_kv->ZAdd(0, "myzset", 2, "three"), 1, "");
 
     CHECK_EQ(int, g_test_kv->ZCard(0, "myzset"), 4, "");
-    double score;
+    long double score;
     CHECK_EQ(int, g_test_kv->ZScore(0, "myzset", "uno", score), 0, "");
     CHECK_EQ(double, score, 1, "");
 
@@ -81,10 +81,10 @@ TEST(ZIncrBy, ZSet)
     g_test_kv->Del(0, "myzset");
     CHECK_EQ(int, g_test_kv->ZAdd(0, "myzset", 1, "one"), 1, "");
     CHECK_EQ(int, g_test_kv->ZAdd(0, "myzset", 2, "two"), 1, "");
-    double dv;
+    long double dv;
     CHECK_EQ(int, g_test_kv->ZIncrBy(0, "myzset", 2, "two", dv), 0, "");
     CHECK_EQ(double, dv, 4, "");
-    double score;
+    long double score;
     CHECK_EQ(int, g_test_kv->ZScore(0, "myzset", "two", score), 0, "");
     CHECK_EQ(double, dv, score, "");
     CHECK_EQ(int, g_test_kv->ZIncrBy(0, "myzset", 3, "three", dv), 0, "");

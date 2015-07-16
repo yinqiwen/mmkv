@@ -56,7 +56,7 @@ namespace mmkv
         int inserted = 0;
         for (size_t i = 0; i < elements.size(); i++)
         {
-            std::pair<StringSet::iterator, bool> ret = set->insert(elements[i]);
+            std::pair<StringSet::iterator, bool> ret = set->insert(Object(elements[i], true));
             if (ret.second)
             {
                 AssignObjectContent(*(ret.first), elements[i], false);
@@ -81,7 +81,7 @@ namespace mmkv
         return set->size();
     }
 
-    int MMKVImpl::GenericSInterDiffUnion(DBID db, int op, const DataArray& keys, const Data* dest, StringArray* res)
+    int MMKVImpl::GenericSInterDiffUnion(DBID db, int op, const DataArray& keys, const Data* dest, const StringArrayResult* res)
     {
         StdObjectSet results[2];
         int result_index = 0;
@@ -219,9 +219,7 @@ namespace mmkv
             StdObjectSet::iterator it = results[result_index].begin();
             while (it != results[result_index].end())
             {
-                std::string str;
-                it->ToString(str);
-                res->push_back(str);
+                it->ToString(res->Get());
                 it++;
             }
         }
@@ -253,11 +251,12 @@ namespace mmkv
                 destset->insert(clone);
                 cit++;
             }
+            return destset->size();
         }
         return 0;
     }
 
-    int MMKVImpl::SDiff(DBID db, const DataArray& keys, StringArray& diffs)
+    int MMKVImpl::SDiff(DBID db, const DataArray& keys, const StringArrayResult& diffs)
     {
         if (keys.size() < 2)
         {
@@ -274,7 +273,7 @@ namespace mmkv
         }
         return GenericSInterDiffUnion(db, OP_DIFF, keys, &destination, NULL);
     }
-    int MMKVImpl::SInter(DBID db, const DataArray& keys, StringArray& inters)
+    int MMKVImpl::SInter(DBID db, const DataArray& keys, const StringArrayResult& inters)
     {
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         return GenericSInterDiffUnion(db, OP_INTER, keys, NULL, &inters);
@@ -302,11 +301,10 @@ namespace mmkv
         {
             return err;
         }
-        return set->find(member) != set->end();
+        return set->find(Object(member, true)) != set->end();
     }
-    int MMKVImpl::SMembers(DBID db, const Data& key, StringArray& members)
+    int MMKVImpl::SMembers(DBID db, const Data& key, const StringArrayResult& members)
     {
-        members.clear();
         int err = 0;
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         StringSet* set = GetObject<StringSet>(db, key, V_TYPE_SET, false, err)();
@@ -317,9 +315,7 @@ namespace mmkv
         StringSet::iterator it = set->begin();
         while (it != set->end())
         {
-            std::string str;
-            it->ToString(str);
-            members.push_back(str);
+            it->ToString(members.Get());
             it++;
         }
         return 0;
@@ -344,7 +340,7 @@ namespace mmkv
         {
             return err;
         }
-        StringSet::iterator found = set1->find(member);
+        StringSet::iterator found = set1->find(Object(member, true));
         if (set1 == set2)
         {
             return found != set1->end() ? 1 : 0;
@@ -361,7 +357,7 @@ namespace mmkv
         }
         return 0;
     }
-    int MMKVImpl::SPop(DBID db, const Data& key, StringArray& members, int count)
+    int MMKVImpl::SPop(DBID db, const Data& key,  const StringArrayResult& members, int count)
     {
         if (m_readonly)
         {
@@ -371,7 +367,6 @@ namespace mmkv
         {
             return ERR_INVALID_NUMBER;
         }
-        members.clear();
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         EnsureWritableValueSpace();
@@ -393,19 +388,16 @@ namespace mmkv
             int rand = random_between_int32(0, set->size() - 1);
             StringSet::iterator it = set->begin();
             it.increment_by(rand);
-            std::string str;
-            it->ToString(str);
-            members.push_back(str);
+            it->ToString(members.Get());
             Object cc = *it;
             set->erase(it);
             DestroyObjectContent(cc);
         }
         return 0;
     }
-    int MMKVImpl::SRandMember(DBID db, const Data& key, StringArray& members, int count)
+    int MMKVImpl::SRandMember(DBID db, const Data& key, const StringArrayResult& members, int count)
     {
         int err = 0;
-        members.clear();
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         StringSet* set = GetObject<StringSet>(db, key, V_TYPE_SET, false, err)();
         if (IS_NOT_EXISTS(err))
@@ -439,9 +431,7 @@ namespace mmkv
             }
             StringSet::iterator it = set->begin();
             it.increment_by(rand);
-            std::string str;
-            it->ToString(str);
-            members.push_back(str);
+            it->ToString(members.Get());
         }
         return 0;
     }
@@ -466,7 +456,7 @@ namespace mmkv
         int removed = 0;
         for (size_t i = 0; i < members.size(); i++)
         {
-            StringSet::iterator found = set->find(members[i]);
+            StringSet::iterator found = set->find(Object(members[i], true));
             if (found != set->end())
             {
                 Object cc = *found;
@@ -477,11 +467,44 @@ namespace mmkv
         }
         return removed;
     }
-    int MMKVImpl::SScan(DBID db, const Data& key, int cursor, const std::string& pattern, int32_t limit_count)
+    int64_t MMKVImpl::SScan(DBID db, const Data& key, int64_t cursor, const std::string& pattern, int32_t limit_count,
+            const StringArrayResult& results)
     {
-        return -1;
+        int err = 0;
+        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
+        StringSet* set = GetObject<StringSet>(db, key, V_TYPE_SET, false, err)();
+        if (NULL == set || 0 != err)
+        {
+            return err;
+        }
+        StringSet::iterator it = set->begin();
+        if (cursor >= set->size())
+        {
+            return 0;
+        }
+        it.increment_by(cursor);
+        int match_count = 0;
+        while (it != set->end())
+        {
+            std::string key_str;
+            it->ToString(key_str);
+            if (pattern == ""
+                    || stringmatchlen(pattern.c_str(), pattern.size(), key_str.c_str(), key_str.size(), 0) == 1)
+            {
+                std::string& ss = results.Get();
+                ss = key_str;
+                match_count++;
+                if (limit_count > 0 && match_count >= limit_count)
+                {
+                    break;
+                }
+            }
+            cursor++;
+            it++;
+        }
+        return it != set->end() ? cursor : 0;
     }
-    int MMKVImpl::SUnion(DBID db, const DataArray& keys, StringArray& unions)
+    int MMKVImpl::SUnion(DBID db, const DataArray& keys, const StringArrayResult& unions)
     {
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         return GenericSInterDiffUnion(db, OP_UNION, keys, NULL, &unions);;

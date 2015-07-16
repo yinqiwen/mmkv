@@ -34,11 +34,47 @@
 #include <sys/wait.h>
 #include <vector>
 
-TEST(Save, Backup)
+TEST(AddSearch, Geo)
 {
-    g_test_kv->Backup("./backup");
-    g_test_kv->Restore("./backup", "./restore");
-    CHECK_EQ(bool, g_test_kv->CompareDataStore("./restore"), true, "");
-}
+    g_test_kv->Del(0, "mygeo");
+    double x = 300.3;
+    double y = 300.3;
 
+    double p_x = 1000.0;
+    double p_y = 1000.0;
+    uint32_t radius = 1000;
+    uint32_t total = 100000;
+    mmkv::GeoPointArray cmp;
+    for (uint32_t i = 0; i < total; i++)
+    {
+        char name[100];
+        sprintf(name, "p%u", i);
+        /*
+         * min accuracy is 0.2meters
+         */
+        double xx = x + i * 0.3;
+        double yy = y + i * 0.3;
+        if (((xx - p_x) * (xx - p_x) + (yy - p_y) * (yy - p_y)) <= radius * radius)
+        {
+            mmkv::GeoPoint p;
+            p.x = xx;
+            p.y = yy;
+            cmp.push_back(p);
+        }
+        CHECK_EQ(int, g_test_kv->GeoAdd(0, "mygeo", "MERCATOR", xx, yy, name), 1, "");
+    }
+    CHECK_EQ(int, g_test_kv->ZCard(0, "mygeo"), total, "");
+
+    mmkv::GeoSearchOptions options;
+    options.coord_type = "MERCATOR";
+    options.by_x = p_x;
+    options.by_y = p_y;
+    options.radius = radius;
+    options.get_patterns.push_back("WITHCOORDINATES");
+    options.get_patterns.push_back("WITHDISTANCES");
+    options.asc = true;
+    mmkv::StringArray results;
+    CHECK_EQ(int, g_test_kv->GeoSearch(0, "mygeo", options, results), 0, "");
+    CHECK_EQ(int, results.size() / 4, cmp.size(), "");
+}
 

@@ -75,6 +75,10 @@ namespace mmkv
         int diff = max - min;
         return (int) (((double) (diff + 1) / RAND_MAX) * rand() + min);
     }
+    int stringmatchlen(const char *pattern, int patternLen, const char *string, int stringLen, int nocase);
+    int stringmatch(const char *pattern, const char *string, int nocase);
+
+    int string_replace(std::string& str, const std::string& pattern, const std::string& newpat);
 
     typedef void lz4_compress_callback(const void* data, uint32_t len, void* cbdata);
     typedef lz4_compress_callback lz4_decompress_callback;

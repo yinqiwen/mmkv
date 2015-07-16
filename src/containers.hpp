@@ -73,10 +73,12 @@ namespace mmkv
     typedef Allocator<TTLValue> TTLValueAllocator;
     typedef mmkv::btree::btree_set<TTLValue, std::less<TTLValue>, TTLValueAllocator> TTLValueSet;
 
+    typedef mmkv::btree::btree_set<DBID, std::less<DBID>, Allocator<DBID> > DBIDSet;
+
     typedef khmap_t<Object, Object, ObjectHash, ObjectEqual, StringMapAllocator> StringHashTable;
-    typedef std::pair<const Object, double> StringScoreValue;
+    typedef std::pair<const Object, long double> StringScoreValue;
     typedef Allocator<StringScoreValue> StringScoreValueAllocator;
-    typedef khmap_t<Object, double, ObjectHash, ObjectEqual, StringScoreValueAllocator> StringDoubleTable;
+    typedef khmap_t<Object, long double, ObjectHash, ObjectEqual, StringScoreValueAllocator> StringDoubleTable;
 
     typedef std::pair<const TTLKey, int64_t> TTLValuePair;
     typedef Allocator<TTLValuePair> TTLValuePairAllocator;

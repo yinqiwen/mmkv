@@ -119,7 +119,7 @@ TEST(SDiff, Set)
     CHECK_EQ(std::string, vs[0], "b", "");
     CHECK_EQ(std::string, vs[1], "d", "");
 
-    CHECK_EQ(int, g_test_kv->SDiffStore(0, "destset", keys), 0, "");
+    CHECK_EQ(int, g_test_kv->SDiffStore(0, "destset", keys), 2, "");
     CHECK_EQ(int, g_test_kv->SCard(0, "destset"), 2, "");
     CHECK_EQ(int, g_test_kv->SMembers(0, "destset", vs), 0, "");
     CHECK_EQ(int, vs.size(), 2, "");
@@ -154,7 +154,7 @@ TEST(SUnion, Set)
     CHECK_EQ(std::string, vs[3], "d", "");
     CHECK_EQ(std::string, vs[4], "e", "");
 
-    CHECK_EQ(int, g_test_kv->SUnionStore(0, "destset", keys), 0, "");
+    CHECK_EQ(int, g_test_kv->SUnionStore(0, "destset", keys), 5, "");
     CHECK_EQ(int, g_test_kv->SCard(0, "destset"), 5, "");
     CHECK_EQ(int, g_test_kv->SMembers(0, "destset", vs), 0, "");
     CHECK_EQ(int, vs.size(), 5, "");
@@ -188,7 +188,7 @@ TEST(SInter, Set)
     CHECK_EQ(int, vs.size(), 1, "");
     CHECK_EQ(std::string, vs[0], "c", "");
 
-    CHECK_EQ(int, g_test_kv->SInterStore(0, "destset", keys), 0, "");
+    CHECK_EQ(int, g_test_kv->SInterStore(0, "destset", keys), 1, "");
     CHECK_EQ(int, g_test_kv->SCard(0, "destset"), 1, "");
     CHECK_EQ(int, g_test_kv->SMembers(0, "destset", vs), 0, "");
     CHECK_EQ(int, vs.size(), 1, "");

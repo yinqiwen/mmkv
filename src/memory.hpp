@@ -73,8 +73,7 @@ namespace mmkv
             int Open(const OpenOptions& open_options);
             int EnsureWritableValueSpace(size_t space_size);
 
-            bool AssignObjectValue(Object& obj, const Data& value, bool in_keyspace = false, bool try_int_encoding =
-                    true);
+            bool AssignObjectValue(Object& obj, const Data& value, bool in_keyspace = false);
             bool ObjectMakeRoom(Object& obj, size_t size, bool in_keyspace = false);
 
             void* Allocate(size_t size, bool in_keyspace = false);
@@ -82,7 +81,7 @@ namespace mmkv
             template<typename T>
             ConstructorProxy<T> FindOrConstructObject(const char* name, bool* created = NULL)
             {
-                Object str(name);
+                Object str(name, false);
                 StringObjectTable* table = m_named_objs;
                 std::pair<StringObjectTable::iterator, bool> ret = table->insert(
                         StringObjectTable::value_type(str, NULL));
@@ -112,7 +111,7 @@ namespace mmkv
             template<typename T>
             T* FindObject(const char* name)
             {
-                Object str(name);
+                Object str(name, false);
                 StringObjectTable* table = m_named_objs;
                 StringObjectTable::iterator it = table->find(str);
                 if (it != table->end())
@@ -120,6 +119,26 @@ namespace mmkv
                     return (T*) (it->second.get());
                 }
                 return NULL;
+            }
+            template<typename T>
+            int EraseObject(const char* name)
+            {
+                Object str(name, false);
+                StringObjectTable* table = m_named_objs;
+                StringObjectTable::iterator it = table->find(str);
+                if (it != table->end())
+                {
+                    T* p =  (T*) (it->second.get());
+                    if(NULL != p)
+                    {
+                        p->~T();
+                        Allocator<T> alloc = m_key_allocator;
+                        alloc.deallocate_ptr(p);
+                    }
+                    table->erase(it);
+                    return 1;
+                }
+                return 0;
             }
 
             Allocator<char> GetKeySpaceAllocator();

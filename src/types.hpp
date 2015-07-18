@@ -175,6 +175,10 @@ namespace mmkv
             }
             inline void SetData(const Data& v, bool try_int_encoding)
             {
+                if(v.Value() == NULL)
+                {
+                    try_int_encoding = true;
+                }
                 if (try_int_encoding && SetInteger(v))
                 {
                     return;

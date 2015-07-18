@@ -326,6 +326,7 @@ namespace mmkv
                 list->push_back(obj);
                 it++;
             }
+            return list->size();
         }
         return 0;
     }

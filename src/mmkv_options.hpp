@@ -77,8 +77,8 @@ namespace mmkv
             int32_t offset;
             int32_t limit;
 
-            double by_x;
-            double by_y;
+            long double by_x;
+            long double by_y;
             std::string by_member;
 
             typedef std::map<std::string, std::string> PatternMap;

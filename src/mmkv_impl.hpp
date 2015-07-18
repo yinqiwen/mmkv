@@ -115,7 +115,7 @@ namespace mmkv
             int GetValueByPattern(MMKVTable* table, const std::string& pattern, const Object& subst, Object& value);
             bool MatchValueByPattern(MMKVTable* table, const std::string& pattern, const std::string& value_pattern, Object& subst);
             int UpdateZSetScore(ZSet& zset, const Object& value, long double score, long double new_score);
-            int GeoSearchWithMinLimit(DBID db, const Data& key, const GeoSearchOptions& options, long double x, long double y, int min_limit, const StringArrayResult& results);
+            int GeoSearchWithMinLimit(DBID db, const Data& key, const GeoSearchOptions& options, int coord_type, long double x, long double y, int min_limit, const StringArrayResult& results);
         public:
             MMKVImpl();
             MemorySegmentManager& GetMemoryManager()
@@ -222,7 +222,7 @@ namespace mmkv
             int RandomKey(DBID db, std::string& key);
             int Rename(DBID db, const Data& key, const Data& new_key);
             int RenameNX(DBID db, const Data& key, const Data& new_key);
-            int64_t Scan(DBID db, int64_t cursor, const std::string& pattern, int32_t limit_count, ScanCB cb, void* cbdata);
+            int64_t Scan(DBID db, int64_t cursor, const std::string& pattern, int32_t limit_count, const StringArrayResult& result);
             int64_t TTL(DBID db, const Data& key);
             int Persist(DBID db, const Data& key);
             int Type(DBID db, const Data& key);

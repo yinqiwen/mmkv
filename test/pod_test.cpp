@@ -31,6 +31,9 @@
 #include "containers.hpp"
 #include <boost/interprocess/offset_ptr.hpp>
 #include <boost/interprocess/containers/vector.hpp>
+#include <boost/interprocess/containers/string.hpp>
+#include <functional>
+#include <boost/functional/hash.hpp>
 
 struct TestPOD
 {
@@ -97,12 +100,16 @@ struct TestPODContainer
 
 TEST(Containers, POD)
 {
+    const int pod_type = 2;
     g_test_kv->Del(0, "mypod");
     int err;
     {
         mmkv::LockedPOD<TestPODContainer> pod;
         mmkv::Allocator<int> allocator = g_test_kv->GetAllocator<int>();
-        g_test_kv->GetPOD(0, "mypod", false, true, 2, pod, err)(allocator);
+
+        g_test_kv->GetPOD(0, "mypod", false, true, pod_type, pod, err)(allocator);
+        TestPODContainer::IntList t1(allocator);
+        pod->ids = t1;
         CHECK_EQ(int, err, 0, "");
         pod->a = 1;
         pod->ids.push_back(100);
@@ -112,7 +119,7 @@ TEST(Containers, POD)
     {
         mmkv::LockedPOD<TestPODContainer> pod;
         mmkv::Allocator<int> allocator = g_test_kv->GetAllocator<int>();
-        g_test_kv->GetPOD(0, "mypod", true, false, 2, pod, err)(allocator);
+        g_test_kv->GetPOD(0, "mypod", true, false, pod_type, pod, err)(allocator);
         CHECK_EQ(int, err, 0, "");
         CHECK_EQ(int, pod->a, 1, "");
         CHECK_EQ(int, pod->ids.size(), 3, "");
@@ -120,13 +127,53 @@ TEST(Containers, POD)
         CHECK_EQ(int, pod->ids[1], 200, "");
         CHECK_EQ(int, pod->ids[2], 300, "");
     }
-    //CHECK_EQ(int, g_test_kv->RegisterPODType<TestPODContainer>(2), 0, "");
     CHECK_EQ(int, g_test_kv->Del(0, "mypod"), 1, "");
     {
         mmkv::LockedPOD<TestPODContainer> pod;
         mmkv::Allocator<int> allocator = g_test_kv->GetAllocator<int>();
-        g_test_kv->GetPOD(0, "mypod", false, false, 2, pod, err)(allocator);
+        g_test_kv->GetPOD(0, "mypod", false, false, pod_type, pod, err)(allocator);
         CHECK_EQ(int, err, mmkv::ERR_ENTRY_NOT_EXIST, "");
     }
 }
+typedef boost::interprocess::basic_string<char, std::char_traits<char>, mmkv::Allocator<char> > SHMStr;
+typedef boost::interprocess::vector<int, mmkv::Allocator<int> > IntArray;
+struct ComplexStruct
+{
+        uint64_t v0;
+        double v1;
+        SHMStr s1;
+        SHMStr s2;
+        IntArray a1;
+        IntArray a2;
+        ComplexStruct(const mmkv::Allocator<int>& alloc) :
+                s1(alloc), s2(alloc), a1(alloc), a2(alloc)
+        {
+        }
+};
+typedef std::pair<const int, ComplexStruct> ComplexStructPair;
+typedef khmap_t<int, ComplexStruct, boost::hash<int>, std::equal_to<int>, mmkv::Allocator<ComplexStructPair> > ComplexStructTable;
 
+TEST(ComplexStruct, POD)
+{
+    const uint32_t pod_type = 3;
+    g_test_kv->RegisterPODType<ComplexStructTable>(pod_type);
+    g_test_kv->Del(0, "mypod1");
+
+    int err;
+    {
+        mmkv::LockedPOD<ComplexStructTable> pod;
+        mmkv::Allocator<ComplexStructPair> allocator = g_test_kv->GetAllocator<ComplexStructPair>();
+        g_test_kv->GetPOD(0, "mypod1", false, true, pod_type, pod, err)(allocator);
+        for(int i = 0; i < 100; i++)
+        {
+            ComplexStruct ss(allocator);
+            ss.a1.push_back(i);
+            ss.a2.push_back(i);
+            ss.s1.assign("12");
+            ss.s2.assign("3456");
+            ss.v0 = i;
+            ss.v1 = i;
+            pod->insert(i, ss);
+        }
+    }
+}

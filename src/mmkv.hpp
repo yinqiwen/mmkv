@@ -319,7 +319,6 @@ namespace mmkv
     };
     typedef std::vector<GeoPoint> GeoPointArray;
 
-    typedef int ScanCB(std::string& element, void* cbdata);
     class MMKV
     {
         private:
@@ -352,8 +351,7 @@ namespace mmkv
             virtual int RandomKey(DBID db, std::string& key)= 0;
             virtual int Rename(DBID db, const Data& key, const Data& new_key)= 0;
             virtual int RenameNX(DBID db, const Data& key, const Data& new_key)= 0;
-            virtual int64_t Scan(DBID db, int64_t cursor, const std::string& pattern, int32_t limit_count, ScanCB cb,
-                    void* cbdata)= 0;
+            virtual int64_t Scan(DBID db, int64_t cursor, const std::string& pattern, int32_t limit_count, const StringArrayResult& result)= 0;
             virtual int64_t TTL(DBID db, const Data& key)= 0;
             virtual int Persist(DBID db, const Data& key)= 0;
             virtual int Type(DBID db, const Data& key)= 0;

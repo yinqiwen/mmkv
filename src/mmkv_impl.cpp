@@ -182,6 +182,7 @@ namespace mmkv
 
     int MMKVImpl::Open(const OpenOptions& open_options)
     {
+        m_options = open_options;
         m_readonly = open_options.readonly;
         m_logger.loglevel = open_options.log_level;
         if (NULL != open_options.log_func)
@@ -250,7 +251,7 @@ namespace mmkv
         {
             return ERR_PERMISSION_DENIED;
         }
-        MMKVTable* kv = GetMMKVTable(db, false);
+        MMKVTable* kv = GetMMKVTable(db, created_if_notexist ? true : false);
         if (NULL == kv)
         {
             return ERR_ENTRY_NOT_EXIST;
@@ -453,6 +454,7 @@ namespace mmkv
                 PODestructor* des = GetPODDestructor(pod_header->type);
                 if (NULL == des)
                 {
+                    WARN_LOG("Bo desturctor found for POD type:%u", pod_header->type);
                     return ERR_NO_DESTRUCTOR;
                 }
                 (*des)(obj);
@@ -479,7 +481,7 @@ namespace mmkv
         }
         else
         {
-            ERROR_LOG("Destroy value failed with err:%d", err);
+            ERROR_LOG("Destroy value failed with err:%d for type:%u", err, v.type);
         }
         return err;
     }
@@ -489,7 +491,6 @@ namespace mmkv
         MMKVTable::iterator found = table->find(key);
         if (found != table->end())
         {
-            //const Object& value_data = found.value();
             const Object& value_data = found->second;
             int err = GenericDelValue(value_data);
             if (0 != err)
@@ -543,7 +544,16 @@ namespace mmkv
         int count = 0;
         for (size_t i = 0; i < keys.size(); i++)
         {
-            count += GenericDel(kv, Object(keys[i], false));
+            int err = GenericDel(kv, Object(keys[i], false));
+            if(err < 0)
+            {
+                if(keys.size() == 1)
+                {
+                    return err;
+                }
+                err = 0;
+            }
+            count += err;
         }
         return count;
     }
@@ -779,8 +789,8 @@ namespace mmkv
         return 0;
     }
 
-    int64_t MMKVImpl::Scan(DBID db, int64_t cursor, const std::string& pattern, int32_t limit_count, ScanCB cb,
-            void* cbdata)
+    int64_t MMKVImpl::Scan(DBID db, int64_t cursor, const std::string& pattern, int32_t limit_count,
+            const StringArrayResult& result)
     {
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         MMKVTable* kv = GetMMKVTable(db, false);
@@ -800,7 +810,8 @@ namespace mmkv
                 if (pattern == ""
                         || stringmatchlen(pattern.c_str(), pattern.size(), key_str.c_str(), key_str.size(), 0) == 1)
                 {
-                    cb(key_str, cbdata);
+                    std::string& ss = result.Get();
+                    ss = key_str;
                     match_count++;
                     if (limit_count > 0 && match_count >= limit_count)
                     {

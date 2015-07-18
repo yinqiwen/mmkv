@@ -271,6 +271,10 @@ namespace mmkv
         if (top_size < space_size)
         {
             size_t new_size = meta->file_size * 2;
+            while(new_size < space_size)
+            {
+                new_size += meta->file_size * 2;
+            }
             return Expand(new_size);
         }
         return 0;

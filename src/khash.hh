@@ -250,7 +250,7 @@ const double __ac_HASH_UPPER = 0.77;
 typedef uint32_t __ac_flag_t;
 const int __ac_FLAG_SHIFT = 4;
 const int __ac_FLAG_MASK = 0xful;
-const __ac_flag_t    __ac_FLAG_DEFAULT = 0xaaaaaaaaul;
+const __ac_flag_t        __ac_FLAG_DEFAULT = 0xaaaaaaaaul;
 
 #define __ac_isempty(flag, i) ((flag[i>>__ac_FLAG_SHIFT]>>((i&__ac_FLAG_MASK)<<1))&2)
 #define __ac_isdel(flag, i) ((flag[i>>__ac_FLAG_SHIFT]>>((i&__ac_FLAG_MASK)<<1))&1)
@@ -340,14 +340,16 @@ class __ac_hash_base_iterator
 {
     protected:
         khashint_t i;
+        khashint_t limit;
         const keytype_t *keys;
         const __ac_flag_t *flags;
     public:
-        __ac_hash_base_iterator()
+        __ac_hash_base_iterator() :
+                i(0), limit(0), keys(NULL), flags(NULL)
         {
         } // No initialization. This is unsafe, but reasonable use will not cause any problems.
-        __ac_hash_base_iterator(khashint_t _i, const keytype_t *_keys, const __ac_flag_t *_flags) :
-                i(_i), keys(_keys), flags(_flags)
+        __ac_hash_base_iterator(khashint_t _i, khashint_t _limit, const keytype_t *_keys, const __ac_flag_t *_flags) :
+                i(_i), limit(_limit), keys(_keys), flags(_flags)
         {
         }
         ;
@@ -378,18 +380,35 @@ class __ac_hash_base_iterator
         inline void operator ++()
         {
             ++i;
+            while (i < limit && !isfilled())
+            {
+                i++;
+            }
+
         }
         inline void operator ++(int)
         {
             ++i;
+            while (i < limit && !isfilled())
+            {
+                i++;
+            }
         }
         inline void operator --()
         {
             --i;
+            while (i > 0 && !isfilled())
+            {
+                i--;
+            }
         }
         inline void operator --(int)
         {
             --i;
+            while (i > 0 && !isfilled())
+            {
+                i--;
+            }
         }
         inline void advance(khashint_t n)
         {
@@ -415,13 +434,15 @@ class __ac_hash_val_iterator: public __ac_hash_base_iterator<keytype_t>
 {
     protected:
         valtype_t *vals;
-        char pair_buf[sizeof(kpair_t<keytype_t, valtype_t>)];
+        char pair_buf[sizeof(kpair_t<keytype_t, valtype_t> )];
     public:
-        __ac_hash_val_iterator()
+        __ac_hash_val_iterator() :
+                vals(NULL)
         {
         }
-        __ac_hash_val_iterator(khashint_t _i, const keytype_t *_keys, const __ac_flag_t *_flags, valtype_t *_vals) :
-                __ac_hash_base_iterator<keytype_t>(_i, _keys, _flags), vals(_vals)
+        __ac_hash_val_iterator(khashint_t _i, khashint_t _limit, const keytype_t *_keys, const __ac_flag_t *_flags,
+                valtype_t *_vals) :
+                __ac_hash_base_iterator<keytype_t>(_i, _limit, _keys, _flags), vals(_vals)
         {
         }
         ;
@@ -432,7 +453,8 @@ class __ac_hash_val_iterator: public __ac_hash_base_iterator<keytype_t>
         inline kpair_t<keytype_t, valtype_t>* operator ->()
         {
             //return &vals[this->i];
-            return  ::new (pair_buf) kpair_t<keytype_t, valtype_t>(__ac_hash_base_iterator<keytype_t>::key(), vals[this->i]);
+            return ::new (pair_buf) kpair_t<keytype_t, valtype_t>(__ac_hash_base_iterator<keytype_t>::key(),
+                    vals[this->i]);
         }
         inline const valtype_t &value() const
         {
@@ -466,13 +488,15 @@ class __ac_hash_base_class
             *i = __ac_hash_insert_aux(key, m, K, F, hashf_t(), hasheq_t());
             if (__ac_isempty(F, *i))
             {
-                K[*i] = key;
+                //K[*i] = key;
+                new (K + *i) keytype_t(key);
                 __ac_set_isboth_false(F, *i);
                 return 1;
             }
             else if (__ac_isdel(F, *i))
             {
-                K[*i] = key;
+                //K[*i] = key;
+                new (K + *i) keytype_t(key);
                 __ac_set_isboth_false(F, *i);
                 return 2;
             }
@@ -483,19 +507,17 @@ class __ac_hash_base_class
             keytype_t* new_key = (keytype_t*)alloc.allocate(sizeof(keytype_t) * new_capacity);
             if(NULL != new_key)
             {
+                __ac_flag_t* this_flags = flags.get();
+                keytype_t* this_keys = keys.get();
                 khashint_t min_size = this->n_capacity < new_capacity?this->n_capacity:new_capacity;
                 for(khashint_t k = 0; k < min_size; k++)
                 {
-                    new_key[k] = keys[k];
+                    if(!__ac_isboth(this_flags, k))
+                    {
+                        new (new_key + k) keytype_t(this_keys[k]);
+                        this_keys[k].~keytype_t();
+                    }
                 }
-                for(khashint_t k = this->n_capacity; k < new_capacity; k++)
-                {
-                    ::new ((void*) (new_key + k)) keytype_t;
-                }
-            }
-            else
-            {
-
             }
             alloc.deallocate_ptr((char*)keys.get());
             keys = new_key;
@@ -559,12 +581,13 @@ class __ac_hash_base_class
         {
             __ac_flag_t *new_flags;
             if (!resize_aux1(&new_capacity, &new_flags)) return false;
+            __ac_flag_t* this_flags = flags.get();
             for (khashint_t j = 0; j != n_capacity; ++j)
             {
-                if (__ac_isboth(flags, j) == 0)
+                if (__ac_isboth(this_flags, j) == 0)
                 {
                     keytype_t key = keys[j]; // take out the key
-                    __ac_set_isdel_true(flags, j);// mark "deleted"
+                    __ac_set_isdel_true(this_flags, j);// mark "deleted"
                     while (1)
                     {
                         khashint_t inc, k, i;
@@ -577,14 +600,15 @@ class __ac_hash_base_class
                             else i += inc;
                         }
                         __ac_set_isempty_false(new_flags, i);
-                        if (i < this->n_capacity && __ac_isboth(flags, i) == 0)
+                        if (i < this->n_capacity && __ac_isboth(this_flags, i) == 0)
                         { // something is here
                             {   keytype_t tmp = keys[i]; keys[i] = key; key = tmp;} // take it out
-                            __ac_set_isdel_true(flags, i);
+                            __ac_set_isdel_true(this_flags, i);
                         }
                         else
                         { // put key and quit the loop
-                            keys[i] = key;
+                          //keys[i] = key;
+                            new (keys.get()+i) keytype_t(key);
                             break;
                         }
                     }
@@ -610,6 +634,15 @@ class __ac_hash_base_class
         {
             if (flags.get())
             {
+                keytype_t* this_vals = keys.get();
+                __ac_flag_t* this_flags = this->flags.get();
+                for(size_t i = 0; i < this->n_capacity; i++)
+                {
+                    if(!__ac_isboth(this_flags, i))
+                    {
+                        this_vals[i].~keytype_t();
+                    }
+                }
                 for (khashint_t t = 0; t < ((n_capacity>>__ac_FLAG_SHIFT) + 1); ++t)
                 flags[t] = __ac_FLAG_DEFAULT;
             }
@@ -643,11 +676,12 @@ class khset_t: public __ac_hash_base_class<keytype_t, hashf_t, hasheq_t, alloc_t
         }
         ~khset_t(void)
         {
+            this->clear();
         }
-
         /** clone */
         void clone(selftype_t * other)
         {
+            other->clear();
             if (other->flags.get())
             {
                 this->alloc.deallocate_ptr((char*) other->flags.get());
@@ -659,13 +693,17 @@ class khset_t: public __ac_hash_base_class<keytype_t, hashf_t, hasheq_t, alloc_t
             memcpy(other, this, sizeof(selftype_t));
             other->flags = (__ac_flag_t *) this->alloc.allocate(
                     ((this->n_capacity >> __ac_FLAG_SHIFT) + 1) * sizeof(__ac_flag_t ));
-            memcpy(other->flags.get(), this->flags.get(), sizeof(__ac_flag_t) * ((this->n_capacity>>__ac_FLAG_SHIFT)+1));
+            __ac_flag_t* this_flags = this->flags.get();
+            memcpy(other->flags.get(), this_flags, sizeof(__ac_flag_t) * ((this->n_capacity>>__ac_FLAG_SHIFT)+1));
             other->keys = (keytype_t*) this->alloc.allocate(this->n_capacity * sizeof(keytype_t));
             if (NULL != other->keys)
             {
                 for (khashint_t k = 0; k < this->n_capacity; k++)
                 {
-                    other->keys[k] = this->keys[k];
+                    if (!__ac_isboth(this_flags, k))
+                    {
+                        new (other->keys.get() + k) keytype_t(this->keys[k]);
+                    }
                 }
             }
         }
@@ -683,7 +721,7 @@ class khset_t: public __ac_hash_base_class<keytype_t, hashf_t, hasheq_t, alloc_t
             khashint_t i;
             int ret = direct_insert_aux(key, this->n_capacity, this->keys, this->flags, &i);
             if (ret == 0)
-                return inspair_t(iterator(i, this->keys, this->flags), false);
+                return inspair_t(iterator(i, this->n_capacity, this->keys, this->flags), false);
             if (ret == 1)
             {
                 ++(this->n_size);
@@ -691,7 +729,7 @@ class khset_t: public __ac_hash_base_class<keytype_t, hashf_t, hasheq_t, alloc_t
             }
             else
                 ++(this->n_size); // then ret == 2
-            return inspair_t(iterator(i, this->keys, this->flags), true);
+            return inspair_t(iterator(i, this->n_capacity, this->keys, this->flags), true);
         }
         /** delete a key */
         inline iterator erase(const keytype_t &key)
@@ -700,7 +738,7 @@ class khset_t: public __ac_hash_base_class<keytype_t, hashf_t, hasheq_t, alloc_t
             if (i != this->n_capacity)
             {
                 --(this->n_size);
-                return iterator(i, this->keys, this->flags);
+                return iterator(i, this->n_capacity, this->keys, this->flags);
             }
             else
                 return this->end();
@@ -719,12 +757,12 @@ class khset_t: public __ac_hash_base_class<keytype_t, hashf_t, hasheq_t, alloc_t
         /** the first iterator */
         inline iterator begin()
         {
-            return iterator(0, this->keys, this->flags);
+            return iterator(0, this->n_capacity, this->keys, this->flags);
         }
         /** the last iterator */
         inline iterator end()
         {
-            return iterator(this->n_capacity, this->keys, this->flags);
+            return iterator(this->n_capacity, this->n_capacity, this->keys, this->flags);
         }
 };
 
@@ -762,7 +800,7 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
         ;
         ~khmap_t(void)
         {
-            //::free(vals);
+            clear();
             if (vals.get() != NULL)
             {
                 alloc.deallocate_ptr((char*) vals.get());
@@ -774,9 +812,24 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
             return alloc_t(this->alloc);
         }
         typedef __ac_hash_val_iterator <keytype_t, valtype_t> iterator;
+
+        void clear()
+        {
+            valtype_t* this_vals = vals.get();
+            __ac_flag_t* this_flags = this->flags.get();
+            for (size_t i = 0; this->n_size > 0 && i < this->n_capacity; i++)
+            {
+                if (!__ac_isboth(this_flags, i))
+                {
+                    this_vals[i].~valtype_t();
+                }
+            }
+            super_super_type::clear();
+        }
         /** clone */
         void clone(selftype_t * h2)
         {
+            h2->clear();
             if (h2->flags.get())
             {
                 this->alloc.deallocate_ptr((char*) h2->flags.get());
@@ -794,12 +847,15 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
                     ((this->n_capacity >> __ac_FLAG_SHIFT) + 1) * sizeof(__ac_flag_t ));
             memcpy(h2->flags.get(), this->flags.get(), sizeof(__ac_flag_t) * ((this->n_capacity>>__ac_FLAG_SHIFT)+1));
             h2->keys = (keytype_t*) this->alloc.allocate(this->n_capacity * sizeof(keytype_t));
-            //memcpy(h2->keys, this->keys, this->n_capacity * sizeof(keytype_t));
+            __ac_flag_t* this_flags = this->flags.get();
             if (NULL != h2->keys)
             {
                 for (khashint_t k = 0; k < this->n_capacity; k++)
                 {
-                    h2->keys[k] = this->keys[k];
+                    if (!__ac_isboth(this_flags, k))
+                    {
+                        new (h2->keys.get() + k) keytype_t(this->keys[k]);
+                    }
                 }
             }
             h2->vals = (valtype_t*) this->alloc.allocate(this->n_capacity * sizeof(valtype_t));
@@ -808,7 +864,10 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
             {
                 for (khashint_t k = 0; k < this->n_capacity; k++)
                 {
-                    h2->vals[k] = this->vals[k];
+                    if (!__ac_isboth(this_flags, k))
+                    {
+                        new (h2->vals.get() + k) valtype_t(this->vals[k]);
+                    }
                 }
             }
         }
@@ -820,11 +879,11 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
                 khashint_t min_size = this->n_capacity < new_capacity ? this->n_capacity : new_capacity;
                 for (khashint_t k = 0; k < min_size; k++)
                 {
-                    new_val[k] = vals[k];
-                }
-                for (khashint_t k = this->n_capacity; k < new_capacity; k++)
-                {
-                    //::new ((void*) (new_val + k)) valtype_t;
+                    if (!__ac_isboth(this->flags, k))
+                    {
+                        ::new ((new_val + k)) valtype_t(vals[k]);
+                        vals[k].~valtype_t();
+                    }
                 }
             }
             alloc.deallocate_ptr((char*) vals.get());
@@ -839,32 +898,24 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
             {
                 return false;
             }
-//		for(int k = 0; k < this->n_capacity; k++)
-//		{
-//		    printf("###before rezie val[%d] = %p\n", k, vals[k].get());
-//		}
-            //vals = (valtype_t*)alloc.realloc(vals.get(), sizeof(valtype_t) * new_capacity);
             realloc_value(new_capacity);
             if (vals == 0)
             { // insufficient enough memory?
-              //::free(new_flags);
                 alloc.deallocate_ptr((char*) new_flags);
                 return false;
             }
             valtype_t* vals_ptr = vals.get();
-//        for(int k = 0; k < this->n_capacity; k++)
-//        {
-//            printf("###after rezie val[%d] = %p\n", k, vals[k].get());
-//        }
-//		printf("###rezie with new_capacity:%d, n_capacity:%d\n", new_capacity, this->n_capacity);
+            keytype_t* this_keys = this->keys.get();
+            __ac_flag_t * this_flags = this->flags.get();
             for (khashint_t j = 0; j != this->n_capacity; ++j)
             {
-//		    printf("###__ac_isboth(%d) = %d  %p\n", j, __ac_isboth(this->flags, j), vals[j].get());
-                if (__ac_isboth(this->flags, j) == 0)
+                if (__ac_isboth(this_flags, j) == 0)
                 {
-                    keytype_t key = this->keys[j]; // take out the key
+                    keytype_t key = this_keys[j]; // take out the key
                     valtype_t val = vals_ptr[j];
-                    __ac_set_isdel_true(this->flags, j); // mark "deleted"
+                    __ac_set_isdel_true(this_flags, j); // mark "deleted"
+                    this_keys[j].~keytype_t();
+                    vals_ptr[j].~valtype_t();
                     while (1)
                     {
                         khashint_t inc, k, i;
@@ -879,11 +930,11 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
                                 i += inc;
                         }
                         __ac_set_isempty_false(new_flags, i);
-                        if (i < this->n_capacity && __ac_isboth(this->flags, i) == 0)
+                        if (i < this->n_capacity && __ac_isboth(this_flags, i) == 0)
                         { // something is here
                             {
-                                keytype_t tmp = this->keys[i];
-                                this->keys[i] = key;
+                                keytype_t tmp = this_keys[i];
+                                this_keys[i] = key;
                                 key = tmp;
                             } // take it out
                             {
@@ -891,12 +942,14 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
                                 vals_ptr[i] = val;
                                 val = tmp;
                             } // take it out
-                            __ac_set_isdel_true(this->flags, i);
+                            __ac_set_isdel_true(this_flags, i);
                         }
                         else
                         { // clear
-                            this->keys[i] = key;
-                            vals_ptr[i] = val;
+                          //this->keys[i] = key;
+                          //vals_ptr[i] = val;
+                            new (this_keys + i) keytype_t(key);
+                            new (vals_ptr + i) valtype_t(val);
                             break;
                         }
                     }
@@ -917,7 +970,7 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
                     hasheq_t());
             if (i != this->n_capacity && __ac_isboth(flags_ptr, i) == 0)
             {
-                return iterator(i, keys_ptr, flags_ptr, vals.get());
+                return iterator(i, this->n_capacity, keys_ptr, flags_ptr, vals.get());
             }
             else
             return this->end();
@@ -931,9 +984,9 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
             khashint_t i;
             int ret = this->direct_insert_aux(key, this->n_capacity, keys_ptr, flags_ptr, &i);
             if (ret == 0)
-            return inspair_t(iterator(i, keys_ptr, flags_ptr, vals.get()), false);
+            return inspair_t(iterator(i, this->n_capacity, keys_ptr, flags_ptr, vals.get()), false);
             valtype_t* vals_ptr = vals.get();
-            vals_ptr[i] = const_cast<valtype_t&>(val);
+            new (vals_ptr + i) valtype_t (val);
             if (ret == 1)
             {
                 ++(this->n_size);
@@ -941,7 +994,7 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
             }
             else
             ++(this->n_size); // then ret == 2
-            return inspair_t(iterator(i, keys_ptr, flags_ptr, vals_ptr), true);
+            return inspair_t(iterator(i, this->n_capacity, keys_ptr, flags_ptr, vals_ptr), true);
         }
         inline inspair_t insert(const value_type& val)
         {
@@ -961,7 +1014,8 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
             }
             else
             ++(this->n_size); // then ret == 2
-            vals[i] = valtype_t();
+            //vals[i] = valtype_t();
+            new (vals.get() + i) valtype_t;
             return vals[i];
         }
         inline void erase(iterator &p)
@@ -970,29 +1024,43 @@ class khmap_t: public khset_t<keytype_t, hashf_t, hasheq_t, typename alloc_t::te
             {
                 if (!__ac_isdel(this->flags, p.pos()))
                 {
+                    this->keys[p.pos()].~keytype_t();
+                    this->vals[p.pos()].~valtype_t();
                     __ac_set_isdel_true(this->flags, p.pos());
                     --(this->n_size);
                 }
             }
         }
+        //return next
         inline iterator erase(const keytype_t &key)
         {
             khashint_t i = __ac_hash_erase_aux(key, this->n_capacity, this->keys.get(), this->flags.get(), hashf_t(), hasheq_t());
             if (i != this->n_capacity)
             {
                 --(this->n_size);
-                return iterator(i, this->keys.get(), this->flags.get(), vals.get());
+                {
+                    this->keys[i].~keytype_t();
+                    this->vals[i].~valtype_t();
+                }
+                i++;
+                while(this->n_size > 0 && i < this->n_capacity)
+                {
+                    if(!__ac_isboth(this->flags, i))
+                    {
+                        return iterator(i, this->n_capacity, this->keys.get(), this->flags.get(), vals.get());
+                    }
+                    i++;
+                }
             }
-            else
             return this->end();
         }
         inline iterator begin()
         {
-            return iterator(0, this->keys.get(), this->flags.get(), vals.get());
+            return iterator(0, this->n_capacity,this->keys.get(), this->flags.get(), vals.get());
         }
         inline iterator end()
         {
-            return iterator(this->n_capacity, this->keys.get(), this->flags.get(), vals.get());
+            return iterator(this->n_capacity, this->n_capacity, this->keys.get(), this->flags.get(), vals.get());
         }
         inline void free()
         {

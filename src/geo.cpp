@@ -34,6 +34,7 @@
 #include <vector>
 #include <deque>
 #include <set>
+#include <math.h>
 
 #define GEO_WGS84_TYPE 1
 #define GEO_MERCATOR_TYPE 2
@@ -200,8 +201,8 @@ namespace mmkv
         }
     }
 
-    static inline int get_areas_by_radius(int coord_type, long double latitude, long double longitude, long double radius_meters,
-            GeoHashBitsSet& results)
+    static inline int get_areas_by_radius(int coord_type, long double latitude, long double longitude,
+            long double radius_meters, GeoHashBitsSet& results)
     {
         GeoHashRange lat_range, lon_range;
         get_coord_range(coord_type, lat_range, lon_range);
@@ -385,8 +386,8 @@ namespace mmkv
         return 0;
     }
 
-    static bool verify_distance_if_in_radius(long double x1, long double y1, long double x2, long double y2, long double radius,
-            long double& distance_square, long double accurace)
+    static bool verify_distance_if_in_radius(long double x1, long double y1, long double x2, long double y2,
+            long double radius, long double& distance_square, long double accurace)
     {
         long double xx = (x1 - x2) * (x1 - x2);
         long double yy = (y1 - y2) * (y1 - y2);
@@ -458,7 +459,7 @@ namespace mmkv
             const GeoPoint& point = mercator_points[i];
             GeoHashBits hash;
             geohash_fast_encode(lat_range, lon_range, point.y, point.x, 30, &hash);
-            long  double score = (long double) hash.bits;
+            long double score = (long double) hash.bits;
 
             Object tmpk(point.value, true);
             std::pair<StringDoubleTable::iterator, bool> ret = zset->scores.insert(
@@ -512,11 +513,7 @@ namespace mmkv
 
     int MMKVImpl::GeoSearch(DBID db, const Data& key, const GeoSearchOptions& options, const StringArrayResult& results)
     {
-        int coord_type = get_coord_type(options.coord_type);
-        if (coord_type < 0)
-        {
-            return ERR_INVALID_COORD_TYPE;
-        }
+        int coord_type = GEO_MERCATOR_TYPE;
         long double x = options.by_x, y = options.by_y;
         if (!options.by_member.empty())
         {
@@ -526,10 +523,15 @@ namespace mmkv
             {
                 return err;
             }
-            get_xy_by_hash(GEO_MERCATOR_TYPE, (uint64_t)hash, x, y);
+            get_xy_by_hash(GEO_MERCATOR_TYPE, (uint64_t) hash, x, y);
         }
         else
         {
+            coord_type = get_coord_type(options.coord_type);
+            if(coord_type < 0)
+            {
+                return ERR_INVALID_COORD_TYPE;
+            }
             if (coord_type == GEO_WGS84_TYPE)
             {
                 x = mercator_x(x);
@@ -545,7 +547,7 @@ namespace mmkv
             current_options.radius = min_radius;
             do
             {
-                int point_num = GeoSearchWithMinLimit(db, key, current_options, x, y, options.limit, results);
+                int point_num = GeoSearchWithMinLimit(db, key, current_options, coord_type, x, y, options.limit, results);
                 if (point_num < 0)
                 {
                     return point_num;
@@ -560,7 +562,7 @@ namespace mmkv
                     {
                         break;
                     }
-                    current_options.radius *= (uint32_t)(sqrt((current_options.limit / point_num) + 1));
+                    current_options.radius *= (uint32_t) (sqrt((current_options.limit / point_num) + 1));
                 }
                 else
                 {
@@ -574,7 +576,7 @@ namespace mmkv
         }
         else
         {
-            err = GeoSearchWithMinLimit(db, key, options, x, y, -1, results);
+            err = GeoSearchWithMinLimit(db, key, options, coord_type, x, y, -1, results);
         }
         return err >= 0 ? 0 : err;
     }
@@ -584,14 +586,9 @@ namespace mmkv
             uint64_t start;
             uint64_t stop;
     };
-    int MMKVImpl::GeoSearchWithMinLimit(DBID db, const Data& key, const GeoSearchOptions& options, long double x, long double y,
-            int min_limit, const StringArrayResult& results)
+    int MMKVImpl::GeoSearchWithMinLimit(DBID db, const Data& key, const GeoSearchOptions& options, int coord_type,
+            long double x, long double y, int min_limit, const StringArrayResult& results)
     {
-        int coord_type = get_coord_type(options.coord_type);
-        if (coord_type < 0)
-        {
-            return ERR_INVALID_COORD_TYPE;
-        }
         GeoHashRange lat_range, lon_range;
         get_coord_range(GEO_MERCATOR_TYPE, lat_range, lon_range);
         GeoHashBitsSet ress;
@@ -732,7 +729,7 @@ namespace mmkv
                 if (!strcasecmp(GEO_SEARCH_WITH_DISTANCES, pattern.c_str()))
                 {
                     char dbuf[256];
-                    snprintf(dbuf, sizeof(dbuf), "%.2f", sqrt(point.distance));
+                    snprintf(dbuf, sizeof(dbuf), "%.2Lf", sqrt(point.distance));
                     std::string& ss = results.Get();
                     ss = dbuf;
                 }

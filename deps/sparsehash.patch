@@ -42,9 +42,10 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/dense_hash_set sparsehash-2.0.2-mod/s
  
  #include <sparsehash/internal/sparseconfig.h>
  #include <algorithm>                        // needed by stl_alloc
+Binary files sparsehash-2.0.2/src/sparsehash/internal/core.rz.10918.1437221340 and sparsehash-2.0.2-mod/src/sparsehash/internal/core.rz.10918.1437221340 differ
 diff -rupN sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-2.0.2-mod/src/sparsehash/internal/densehashtable.h
 --- sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h	2012-02-23 04:49:42.000000000 +0800
-+++ sparsehash-2.0.2-mod/src/sparsehash/internal/densehashtable.h	2015-07-09 15:44:38.000000000 +0800
++++ sparsehash-2.0.2-mod/src/sparsehash/internal/densehashtable.h	2015-07-18 18:54:52.000000000 +0800
 @@ -86,8 +86,8 @@
  //    probes/successful lookup    1.06  1.5   1.75  2.5   3.0   5.5   50.5
  //    probes/unsuccessful lookup  1.12  2.5   3.6   8.5   13.0  50.0  5000.0
@@ -74,7 +75,24 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-
  
    // "Real" constructor and default constructor
    dense_hashtable_iterator(const dense_hashtable<V,K,HF,ExK,SetK,EqK,A> *h,
-@@ -213,7 +215,8 @@ struct dense_hashtable_const_iterator {
+@@ -182,6 +184,16 @@ struct dense_hashtable_iterator {
+     while ( pos != end && (ht->test_empty(*this) || ht->test_deleted(*this)) )
+       ++pos;
+   }
++  void advance(size_t n){
++      if( n < (end-pos)){
++          pos += n;
++          if(ht->test_empty(*this) || ht->test_deleted(*this)){
++              advance_past_empty_and_deleted();
++          }
++      }else{
++          pos = end;
++      }
++  }
+   iterator& operator++()   {
+     assert(pos != end); ++pos; advance_past_empty_and_deleted(); return *this;
+   }
+@@ -213,7 +225,8 @@ struct dense_hashtable_const_iterator {
    typedef typename value_alloc_type::difference_type difference_type;
    typedef typename value_alloc_type::size_type size_type;
    typedef typename value_alloc_type::const_reference reference;
@@ -84,7 +102,24 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-
  
    // "Real" constructor and default constructor
    dense_hashtable_const_iterator(
-@@ -272,8 +275,11 @@ class dense_hashtable {
+@@ -240,6 +253,16 @@ struct dense_hashtable_const_iterator {
+     while ( pos != end && (ht->test_empty(*this) || ht->test_deleted(*this)) )
+       ++pos;
+   }
++  void advance(size_t n){
++      if( n < (end-pos)){
++          pos += n;
++          if(ht->test_empty(*this) || ht->test_deleted(*this)){
++              advance_past_empty_and_deleted();
++          }
++      }else{
++          pos = end;
++      }
++  }
+   const_iterator& operator++()   {
+     assert(pos != end); ++pos; advance_past_empty_and_deleted(); return *this;
+   }
+@@ -272,8 +295,11 @@ class dense_hashtable {
    typedef typename value_alloc_type::difference_type difference_type;
    typedef typename value_alloc_type::reference reference;
    typedef typename value_alloc_type::const_reference const_reference;
@@ -98,7 +133,7 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-
    typedef dense_hashtable_iterator<Value, Key, HashFcn,
                                     ExtractKey, SetKey, EqualKey, Alloc>
    iterator;
-@@ -308,19 +314,19 @@ class dense_hashtable {
+@@ -308,19 +334,19 @@ class dense_hashtable {
    static const size_type HT_DEFAULT_STARTING_BUCKETS = 32;
  
    // ITERATOR FUNCTIONS
@@ -127,7 +162,7 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-
    }
    local_iterator end(size_type i) {
      local_iterator it = begin(i);
-@@ -329,7 +335,7 @@ class dense_hashtable {
+@@ -329,7 +355,7 @@ class dense_hashtable {
      return it;
    }
    const_local_iterator begin(size_type i) const {
@@ -136,7 +171,7 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-
    }
    const_local_iterator end(size_type i) const {
      const_local_iterator it = begin(i);
-@@ -353,7 +359,7 @@ class dense_hashtable {
+@@ -353,7 +379,7 @@ class dense_hashtable {
    // const components (they're probably pair<const X, Y>).  We use
    // explicit destructor invocation and placement new to get around
    // this.  Arg.
@@ -145,7 +180,7 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-
      dst->~value_type();   // delete the old value, if any
      new(dst) value_type(src);
    }
-@@ -507,7 +513,7 @@ class dense_hashtable {
+@@ -507,7 +533,7 @@ class dense_hashtable {
      // num_buckets was set in constructor even though table was NULL
      table = val_info.allocate(num_buckets);
      assert(table);
@@ -154,7 +189,7 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-
    }
    // TODO(user): return a key_type rather than a value_type
    value_type empty_key() const {
-@@ -767,7 +773,7 @@ class dense_hashtable {
+@@ -767,7 +793,7 @@ class dense_hashtable {
  
   private:
    void clear_to_size(size_type new_num_buckets) {
@@ -163,7 +198,7 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-
        table = val_info.allocate(new_num_buckets);
      } else {
        destroy_buckets(0, num_buckets);
-@@ -780,7 +786,7 @@ class dense_hashtable {
+@@ -780,7 +806,7 @@ class dense_hashtable {
        }
      }
      assert(table);
@@ -172,7 +207,7 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-
      num_elements = 0;
      num_deleted = 0;
      num_buckets = new_num_buckets;          // our new size
-@@ -855,7 +861,7 @@ class dense_hashtable {
+@@ -855,7 +881,7 @@ class dense_hashtable {
      if ( pos.first == ILLEGAL_BUCKET )     // alas, not there
        return end();
      else
@@ -181,7 +216,7 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-
    }
  
    const_iterator find(const key_type& key) const {
-@@ -864,7 +870,7 @@ class dense_hashtable {
+@@ -864,7 +890,7 @@ class dense_hashtable {
      if ( pos.first == ILLEGAL_BUCKET )     // alas, not there
        return end();
      else
@@ -190,7 +225,7 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-
    }
  
    // This is a tr1 method: the bucket a given key is in, or what bucket
-@@ -911,7 +917,7 @@ class dense_hashtable {
+@@ -911,7 +937,7 @@ class dense_hashtable {
      }
      if ( test_deleted(pos) ) {      // just replace if it's been del.
        // shrug: shouldn't need to be const.
@@ -199,7 +234,7 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-
        clear_deleted(delpos);
        assert( num_deleted > 0);
        --num_deleted;                // used to be, now it isn't
-@@ -919,7 +925,7 @@ class dense_hashtable {
+@@ -919,7 +945,7 @@ class dense_hashtable {
        ++num_elements;               // replacing an empty bucket
      }
      set_value(&table[pos], obj);
@@ -208,7 +243,7 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-
    }
  
    // If you know *this is big enough to hold obj, use this routine
-@@ -932,8 +938,8 @@ class dense_hashtable {
+@@ -932,8 +958,8 @@ class dense_hashtable {
             && "Inserting the deleted key");
      const std::pair<size_type,size_type> pos = find_position(get_key(obj));
      if ( pos.first != ILLEGAL_BUCKET) {      // object was already there
@@ -219,7 +254,7 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/densehashtable.h sparsehash-
                                   false);          // false: we didn't insert
      } else {                                 // pos.second says where to put it
        return std::pair<iterator,bool>(insert_at(obj, pos.second), true);
-@@ -1281,7 +1287,7 @@ class dense_hashtable {
+@@ -1281,7 +1307,7 @@ class dense_hashtable {
    size_type num_elements;
    size_type num_buckets;
    ValInfo val_info;       // holds emptyval, and also the allocator
@@ -258,7 +293,7 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/libc_allocator_with_realloc.
  #include <stdlib.h>           // for malloc/realloc/free
 diff -rupN sparsehash-2.0.2/src/sparsehash/internal/sparsehashtable.h sparsehash-2.0.2-mod/src/sparsehash/internal/sparsehashtable.h
 --- sparsehash-2.0.2/src/sparsehash/internal/sparsehashtable.h	2012-02-23 04:49:42.000000000 +0800
-+++ sparsehash-2.0.2-mod/src/sparsehash/internal/sparsehashtable.h	2015-07-09 15:45:16.000000000 +0800
++++ sparsehash-2.0.2-mod/src/sparsehash/internal/sparsehashtable.h	2015-07-18 20:04:04.000000000 +0800
 @@ -92,8 +92,8 @@
  // The value type is required to be copy constructible and default
  // constructible, but it need not be (and commonly isn't) assignable.
@@ -280,7 +315,21 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/sparsehashtable.h sparsehash
  
    // "Real" constructor and default constructor
    sparse_hashtable_iterator(const sparse_hashtable<V,K,HF,ExK,SetK,EqK,A> *h,
-@@ -225,7 +226,8 @@ struct sparse_hashtable_const_iterator {
+@@ -193,6 +194,13 @@ struct sparse_hashtable_iterator {
+     while ( pos != end && ht->test_deleted(*this) )
+       ++pos;
+   }
++  void advance(size_t n){
++      while(pos != end && n > 0){
++          ++pos;
++          --n;
++          advance_past_deleted();
++      }
++  }
+   iterator& operator++()   {
+     assert(pos != end); ++pos; advance_past_deleted(); return *this;
+   }
+@@ -225,7 +233,8 @@ struct sparse_hashtable_const_iterator {
    typedef typename value_alloc_type::difference_type difference_type;
    typedef typename value_alloc_type::size_type size_type;
    typedef typename value_alloc_type::const_reference reference;
@@ -290,7 +339,21 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/sparsehashtable.h sparsehash
  
    // "Real" constructor and default constructor
    sparse_hashtable_const_iterator(const sparse_hashtable<V,K,HF,ExK,SetK,EqK,A> *h,
-@@ -279,7 +281,8 @@ struct sparse_hashtable_destructive_iter
+@@ -248,6 +257,13 @@ struct sparse_hashtable_const_iterator {
+     while ( pos != end && ht->test_deleted(*this) )
+       ++pos;
+   }
++  void advance(size_t n){
++      while(pos != end && n > 0){
++          ++pos;
++          --n;
++          advance_past_deleted();
++      }
++  }
+   const_iterator& operator++() {
+     assert(pos != end); ++pos; advance_past_deleted(); return *this;
+   }
+@@ -279,7 +295,8 @@ struct sparse_hashtable_destructive_iter
    typedef typename value_alloc_type::difference_type difference_type;
    typedef typename value_alloc_type::size_type size_type;
    typedef typename value_alloc_type::reference reference;
@@ -300,7 +363,7 @@ diff -rupN sparsehash-2.0.2/src/sparsehash/internal/sparsehashtable.h sparsehash
  
    // "Real" constructor and default constructor
    sparse_hashtable_destructive_iterator(const
-@@ -333,8 +336,10 @@ class sparse_hashtable {
+@@ -333,8 +350,10 @@ class sparse_hashtable {
    typedef typename value_alloc_type::difference_type difference_type;
    typedef typename value_alloc_type::reference reference;
    typedef typename value_alloc_type::const_reference const_reference;

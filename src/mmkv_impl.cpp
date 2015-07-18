@@ -121,14 +121,16 @@ namespace mmkv
         {
             ObjectMapAllocator allocator(m_segment.GetKeySpaceAllocator());
             bool created = false;
-            kv = m_segment.FindOrConstructObject<MMKVTable>(name, &created)(allocator);
-//            kv = m_segment.FindOrConstructObject<MMKVTable>(name, &created)(0, ObjectHash(), ObjectEqual(), allocator);
+            //kv = m_segment.FindOrConstructObject<MMKVTable>(name, &created)(allocator);
+            kv = m_segment.FindOrConstructObject<MMKVTable>(name, &created)(0, ObjectHash(), ObjectEqual(), allocator);
             if (created)
             {
                 m_dbid_set->insert(db);
-//                Object empty;
-//                kv->set_deleted_key(empty);
-//                kv->set_empty_key(empty);
+                Object empty;
+                kv->set_empty_key(empty);
+                Object deleted;
+                deleted.SetData(DENSE_TABLE_DELETED_KEY, false);
+                kv->set_deleted_key(deleted);
             }
         }
         else
@@ -151,7 +153,6 @@ namespace mmkv
         {
             return NULL;
         }
-        //return &(found.value());
         return &(found->second);
     }
 
@@ -279,8 +280,7 @@ namespace mmkv
             {
                 return ERR_ENTRY_NOT_EXIST;
             }
-            //value_data = const_cast<Object*>(&(found.value()));
-            value_data = const_cast<Object*>(&(found->second));
+            value_data = &(found->second);
         }
         if (IsExpired(db, key, *value_data))
         {
@@ -395,10 +395,10 @@ namespace mmkv
                 StringHashTable::iterator it = m->begin();
                 while (it != m->end())
                 {
-                    if (it.isfilled())
+                    //if (it.isfilled())
                     {
-                        DestroyObjectContent(it.key());
-                        DestroyObjectContent(it.value());
+                        DestroyObjectContent(it->first);
+                        DestroyObjectContent(it->second);
                     }
                     it++;
                 }
@@ -487,7 +487,6 @@ namespace mmkv
     }
     int MMKVImpl::GenericDel(MMKVTable* table, const Object& key)
     {
-        //Object tmpkey(key);
         MMKVTable::iterator found = table->find(key);
         if (found != table->end())
         {
@@ -497,7 +496,6 @@ namespace mmkv
             {
                 return err;
             }
-            //DestroyObjectContent(found.key());
             DestroyObjectContent(found->first);
             table->erase(found);
             return 1;
@@ -511,19 +509,16 @@ namespace mmkv
         std::pair<MMKVTable::iterator, bool> ret = table->insert(MMKVTable::value_type(tmpkey, v));
         if (!ret.second)
         {
-            //const Object& old_data = ret.first.value();
             Object& old_data = ret.first->second;
             if (!replace)
             {
                 return 0;
             }
             GenericDelValue(old_data);
-            //ret.first.value(v);
             old_data = v;
         }
         else
         {
-            //m_segment.AssignObjectValue(const_cast<Object&>(ret.first.key()), key, false);
             m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), key, false);
         }
         return 1;
@@ -738,8 +733,8 @@ namespace mmkv
         while (true)
         {
             MMKVTable::iterator it = kv->begin();
-            it.advance(random_between_int32(0, INT_MAX) % kv->capacity());
-            if (it.isfilled())
+            it.advance(random_between_int32(0, INT_MAX) % kv->bucket_count());
+            if (it != kv->end())
             {
                 it->first.ToString(key);
                 return 0;
@@ -753,7 +748,7 @@ namespace mmkv
         MMKVTable::iterator it = kv->begin();
         while (it != kv->end())
         {
-            if (it.isfilled())
+            //if (it.isfilled())
             {
                 it->first.ToString(key);
                 return 0;
@@ -773,7 +768,7 @@ namespace mmkv
         MMKVTable::iterator it = kv->begin();
         while (it != kv->end())
         {
-            if (it.isfilled())
+            //if (it.isfilled())
             {
                 std::string key_str;
                 it->first.ToString(key_str);
@@ -799,11 +794,12 @@ namespace mmkv
             return 0;
         }
         int match_count = 0;
+        int pos = cursor >= kv->bucket_count() ? kv->bucket_count() : cursor;
         MMKVTable::iterator it = kv->begin();
-        it.advance(cursor >= kv->capacity() ? kv->capacity() : cursor);
+        it.advance(pos);
         while (it != kv->end())
         {
-            if (it.isfilled())
+            //if (it.isfilled())
             {
                 std::string key_str;
                 it->first.ToString(key_str);
@@ -819,9 +815,10 @@ namespace mmkv
                     }
                 }
             }
+            pos++;
             it++;
         }
-        return it.pos();
+        return it == kv->end()?0:pos;
     }
 
     int64_t MMKVImpl::DBSize(DBID db)
@@ -849,7 +846,7 @@ namespace mmkv
         MMKVTable::iterator it = kv->begin();
         while (it != kv->end())
         {
-            if (it.isfilled())
+            //if (it.isfilled())
             {
                 DestroyObjectContent(it->first);
                 GenericDelValue(it->second);

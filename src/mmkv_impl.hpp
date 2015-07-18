@@ -40,6 +40,7 @@
 #include "mmkv.hpp"
 #include "mmkv_options.hpp"
 
+#define DENSE_TABLE_DELETED_KEY "\t\t\t\t"
 namespace mmkv
 {
     /* Struct to hold a inclusive/exclusive range spec by score comparison. */

@@ -99,7 +99,7 @@ namespace mmkv
                 }
                 ScoreValue fv;
                 AssignScoreValue(fv, vals[i].score, vals[i].value);
-                const_cast<Object&>(ret.first.key()) = fv.value;
+                const_cast<Object&>(ret.first->first) = fv.value;
                 zset->set.insert(fv);
                 modified++;
             }
@@ -112,11 +112,11 @@ namespace mmkv
                 long double new_score = vals[i].score;
                 if (incr)
                 {
-                    new_score += ret.first.value();
+                    new_score += ret.first->second;
                 }
                 else
                 {
-                    if (ret.first.value() == vals[i].score)
+                    if (ret.first->second == vals[i].score)
                     {
                         continue;
                     }
@@ -126,9 +126,9 @@ namespace mmkv
                 {
                     modified++;
                 }
-                if (0 == UpdateZSetScore(*zset, Object(vals[i].value, true), ret.first.value(), new_score))
+                if (0 == UpdateZSetScore(*zset, Object(vals[i].value, true), ret.first->second, new_score))
                 {
-                    ret.first.value(new_score);
+                    ret.first->second = new_score;
                 }
                 else
                 {
@@ -323,15 +323,15 @@ namespace mmkv
         {
             ScoreValue fv;
             AssignScoreValue(fv, increment, member);
-            const_cast<Object&>(ret.first.key()) = fv.value;
+            const_cast<Object&>(ret.first->first) = fv.value;
             zset->set.insert(fv);
             new_score = increment;
         }
         else
         {
-            UpdateZSetScore(*zset, tmpk, ret.first.value(), ret.first.value() + increment);
-            ret.first.value(ret.first.value() + increment);
-            new_score = ret.first.value();
+            UpdateZSetScore(*zset, tmpk, ret.first->second, ret.first->second + increment);
+            ret.first->second = ret.first->second + increment;
+            new_score = ret.first->second;
         }
         return 0;
     }
@@ -669,7 +669,7 @@ namespace mmkv
         }
         ScoreValue sv;
         sv.value = member_obj;
-        sv.score = found.value();
+        sv.score = found->second;
         SortedSet::iterator fit = zset->set.find(sv);
         if (fit == zset->set.end())
         {
@@ -705,7 +705,7 @@ namespace mmkv
                 continue;
             }
             ScoreValue tmp;
-            tmp.score = found.value();
+            tmp.score = found->second;
             tmp.value = mem_obj;
             SortedSet::iterator fit = zset->set.find(tmp);
             if (fit == zset->set.end())
@@ -1110,7 +1110,7 @@ namespace mmkv
         }
         ScoreValue sv;
         sv.value = member_obj;
-        sv.score = found.value();
+        sv.score = found->second;
         SortedSet::iterator fit = zset->set.find(sv);
         if (fit == zset->set.end())
         {
@@ -1133,7 +1133,7 @@ namespace mmkv
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-        score = found.value();
+        score = found->second;
         return 0;
     }
     int64_t MMKVImpl::ZScan(DBID db, const Data& key, int64_t cursor, const std::string& pattern, int32_t limit_count,
@@ -1373,7 +1373,7 @@ namespace mmkv
                         }
                         else
                         {
-                            long double current_score = weights.empty() ? ssit.value() : weights[i] * ssit.value();
+                            long double current_score = weights.empty() ? ssit->second : weights[i] * ssit->second;
                             aggregate_score(aggregate_type, current_score, sit->second);
                             sit++;
                         }
@@ -1385,13 +1385,13 @@ namespace mmkv
         StringDoubleTable::iterator it = destset->scores.begin();
         while (it != destset->scores.end())
         {
-            Object element = it.key();
+            Object element = it->first;
             StdObjectScoreTable::iterator cit = cache_result.find(element);
             if (cit == cache_result.end()) //remove elements from results which already in dest set
             {
                 ScoreValue sv;
                 sv.value = element;
-                sv.score = it.value();
+                sv.score = it->second;
                 destset->scores.erase(it);
                 destset->set.erase(sv);
                 DestroyObjectContent(element);
@@ -1409,12 +1409,12 @@ namespace mmkv
                     StringDoubleTable::value_type(cit->first, cit->second));
             if (!ret.second)
             {
-                ret.first.value(cit->second);
+                ret.first->second = cit->second;
             }
             ScoreValue sv;
             sv.value = CloneStrObject(cit->first, false);
             sv.score = cit->second;
-            const_cast<Object&>(ret.first.key()) = sv.value;
+            const_cast<Object&>(ret.first->first) = sv.value;
             destset->set.insert(sv);
             cit++;
         }

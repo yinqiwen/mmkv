@@ -108,7 +108,7 @@ namespace mmkv
         StringHashTable::iterator it = hash->begin();
         while (it != hash->end())
         {
-            if (it.isfilled())
+            //if (it.isfilled())
             {
                 it->first.ToString(vals.Get());
                 it->second.ToString(vals.Get());
@@ -133,7 +133,8 @@ namespace mmkv
         {
             return err;
         }
-        std::pair<StringHashTable::iterator, bool> ret = hash->insert(StringHashTable::value_type(Object(field, true), Object()));
+        std::pair<StringHashTable::iterator, bool> ret = hash->insert(
+                StringHashTable::value_type(Object(field, true), Object()));
         if (ret.second)
         {
             m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), field, false);
@@ -230,7 +231,7 @@ namespace mmkv
         StringHashTable::iterator it = hash->begin();
         while (it != hash->end())
         {
-            if (it.isfilled())
+            //if (it.isfilled())
             {
                 it->first.ToString(fields.Get());
             }
@@ -306,7 +307,8 @@ namespace mmkv
         }
         return 0;
     }
-    int64_t MMKVImpl::HScan(DBID db, const Data& key, int64_t cursor, const std::string& pattern, int32_t limit_count, const StringArrayResult& results)
+    int64_t MMKVImpl::HScan(DBID db, const Data& key, int64_t cursor, const std::string& pattern, int32_t limit_count,
+            const StringArrayResult& results)
     {
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         int err;
@@ -316,29 +318,32 @@ namespace mmkv
             return err;
         }
         int match_count = 0;
-        StringHashTable::iterator it = hash->begin();
-        it.advance(cursor >= hash->capacity() ? hash->capacity() : cursor);
+        int pos = cursor >= hash->bucket_count() ? hash->bucket_count() : cursor;
+        StringHashTable::local_iterator it = hash->begin(pos);
+        StringHashTable::local_iterator next = hash->begin(pos + 1);
         while (it != hash->end())
         {
-            if (it.isfilled())
+            std::string key_str;
+            it->first.ToString(key_str);
+            if (pattern == ""
+                    || stringmatchlen(pattern.c_str(), pattern.size(), key_str.c_str(), key_str.size(), 0) == 1)
             {
-                std::string key_str;
-                it->first.ToString(key_str);
-                if (pattern == ""
-                        || stringmatchlen(pattern.c_str(), pattern.size(), key_str.c_str(), key_str.size(), 0) == 1)
+                std::string& ss = results.Get();
+                ss = key_str;
+                match_count++;
+                if (limit_count > 0 && match_count >= limit_count)
                 {
-                    std::string& ss = results.Get();
-                    ss = key_str;
-                    match_count++;
-                    if (limit_count > 0 && match_count >= limit_count)
-                    {
-                        break;
-                    }
+                    break;
                 }
             }
             it++;
+            if (next == it)
+            {
+                pos++;
+                next = hash->begin(pos + 1);
+            }
         }
-        return it.pos();
+        return it == hash->end() ? 0 : pos;
     }
     int MMKVImpl::HSet(DBID db, const Data& key, const Data& field, const Data& val, bool nx)
     {
@@ -405,7 +410,7 @@ namespace mmkv
         StringHashTable::iterator it = hash->begin();
         while (it != hash->end())
         {
-            if (it.isfilled())
+            //if (it.isfilled())
             {
                 it->second.ToString(vals.Get());
             }

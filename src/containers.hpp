@@ -68,17 +68,38 @@ namespace mmkv
     typedef std::vector<StringSet*> StringSetArray;
 
     //typedef mmkv::btree::btree_map<MMKeyPtr, MMValuePtr, MMKeyPtrLess, MMKVAllocator> MMKVTable;
-    typedef khmap_t<Object, Object, ObjectHash, ObjectEqual, StringMapAllocator> MMKVTable;
-    //typedef mmkv_google::sparse_hash_map<Object, Object, ObjectHash, ObjectEqual, StringMapAllocator> MMKVTable;
+    //typedef khmap_t<Object, Object, ObjectHash, ObjectEqual, StringMapAllocator> MMKVTable;
+    typedef mmkv_google::dense_hash_map<Object, Object, ObjectHash, ObjectEqual, StringMapAllocator> MMKVTable;
     typedef Allocator<TTLValue> TTLValueAllocator;
     typedef mmkv::btree::btree_set<TTLValue, std::less<TTLValue>, TTLValueAllocator> TTLValueSet;
 
     typedef mmkv::btree::btree_set<DBID, std::less<DBID>, Allocator<DBID> > DBIDSet;
 
-    typedef khmap_t<Object, Object, ObjectHash, ObjectEqual, StringMapAllocator> StringHashTable;
+    //typedef khmap_t<Object, Object, ObjectHash, ObjectEqual, StringMapAllocator> StringHashTable;
+    typedef mmkv_google::sparse_hash_map<Object, Object, ObjectHash, ObjectEqual, StringMapAllocator> SparseStringHashTable;
+    struct StringHashTable: public SparseStringHashTable
+    {
+            StringHashTable(const StringMapAllocator& allocator) :
+                    SparseStringHashTable(0, ObjectHash(), ObjectEqual(), allocator)
+            {
+                Object empty;
+                set_deleted_key(empty);
+            }
+    };
+
     typedef std::pair<const Object, long double> StringScoreValue;
     typedef Allocator<StringScoreValue> StringScoreValueAllocator;
-    typedef khmap_t<Object, long double, ObjectHash, ObjectEqual, StringScoreValueAllocator> StringDoubleTable;
+    //typedef khmap_t<Object, long double, ObjectHash, ObjectEqual, StringScoreValueAllocator> StringDoubleTable;
+    typedef mmkv_google::sparse_hash_map<Object, long double, ObjectHash, ObjectEqual, StringScoreValueAllocator> SparseStringDoubleTable;
+    struct StringDoubleTable: public SparseStringDoubleTable
+    {
+            StringDoubleTable(const StringScoreValueAllocator& allocator) :
+                    SparseStringDoubleTable(0, ObjectHash(), ObjectEqual(), allocator)
+            {
+                Object empty;
+                set_deleted_key(empty);
+            }
+    };
 
     typedef std::pair<const TTLKey, int64_t> TTLValuePair;
     typedef Allocator<TTLValuePair> TTLValuePairAllocator;
@@ -92,12 +113,6 @@ namespace mmkv
                     set(std::less<ScoreValue>(), ScoreValueAllocator(allocator)), scores(
                             StringScoreValueAllocator(allocator))
             {
-
-            }
-            ZSet(const ZSet& other) :
-                    set(other.set), scores(other.scores.get_allocator())
-            {
-                const_cast<StringDoubleTable&>(other.scores).clone(&scores);
             }
             void Clear()
             {

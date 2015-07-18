@@ -69,6 +69,7 @@ namespace mmkv
         ERR_DUPLICATE_POD_TYPE = -1021,
         ERR_INVALID_COORD_TYPE = -1022,
         ERR_INVALID_COORD_VALUE = -1023,
+        ERR_FORBIDEN_KEY = -1024,
     };
 
     enum ObjectType

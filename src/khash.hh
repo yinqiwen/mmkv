@@ -622,10 +622,6 @@ class __ac_hash_base_class
         /** get n_size */
         inline khashint_t size(void) const
         {   return n_size;};
-        inline khashint_t capacity() const
-        {
-            return n_capacity;
-        }
         /** get n_capacity */
         inline khashint_t bucket_count(void) const
         {   return n_capacity;};

@@ -468,17 +468,17 @@ namespace mmkv
             {
                 ScoreValue fv;
                 AssignScoreValue(fv, score, point.value);
-                const_cast<Object&>(ret.first.key()) = fv.value;
+                const_cast<Object&>(ret.first->first) = fv.value;
                 zset->set.insert(fv);
                 inserted++;
             }
             else
             {
-                if (ret.first.value() == score)
+                if (ret.first->second == score)
                 {
                     continue;
                 }
-                if (0 == UpdateZSetScore(*zset, tmpk, ret.first.value(), score))
+                if (0 == UpdateZSetScore(*zset, tmpk, ret.first->second, score))
                 {
                     ret.first->second = score;
                 }
@@ -729,7 +729,7 @@ namespace mmkv
                 if (!strcasecmp(GEO_SEARCH_WITH_DISTANCES, pattern.c_str()))
                 {
                     char dbuf[256];
-                    snprintf(dbuf, sizeof(dbuf), "%.2Lf", sqrt(point.distance));
+                    snprintf(dbuf, sizeof(dbuf), "%.2f", sqrt(point.distance));
                     std::string& ss = results.Get();
                     ss = dbuf;
                 }

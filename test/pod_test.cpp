@@ -29,6 +29,7 @@
 
 #include "ut.hpp"
 #include "containers.hpp"
+#include "khash.hh"
 #include <boost/interprocess/offset_ptr.hpp>
 #include <boost/interprocess/containers/vector.hpp>
 #include <boost/interprocess/containers/string.hpp>

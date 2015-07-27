@@ -59,8 +59,11 @@ namespace mmkv
     void Logger::operator()(LogLevel level, const char* filename, const char* function, int line, const char* format,
             ...)
     {
+        if (NULL == logfunc)
+        {
+            return;
+        }
         const char* levelstr = 0;
-
         if (level > 0 && level < ALL_LOG_LEVEL)
         {
             levelstr = kLogLevelNames[level - 1];

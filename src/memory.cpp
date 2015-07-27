@@ -52,7 +52,7 @@ namespace mmkv
 {
     static const int kHeaderLength = 1024 * 1024;
     static const int kMetaLength = 4096;
-    static const int kLocksFileLength = 4096;
+    static const int kLocksFileLength = 1024 * 1024;
     static pid_t g_current_pid = 0;
     static ThreadLocal<uint32_t> g_lock_state;
     static const char* kBackupFileName = "mmkv.snapshot";
@@ -60,6 +60,8 @@ namespace mmkv
 
     static const uint32_t kMagicCode = 0xCD007B;
     static const uint32_t kVersionCode = 1;
+    static const int kMaxReaderProcCount = 65536;
+    static int g_reader_count_index = -1;
 
     static inline int64_t allign_size(int64_t size, uint32_t allignment)
     {
@@ -83,16 +85,21 @@ namespace mmkv
         g_current_pid = getpid();
         return g_current_pid;
     }
-
+    struct ReaderCount
+    {
+            pid_t pid;
+            volatile uint32_t count;
+    };
     struct MMLock
     {
             SleepingRWLock lock;
-            volatile pid_t writing_pid;
-            volatile uint32_t reading_count;
+            volatile pid_t writer_pid;
+            ReaderCount readers[kMaxReaderProcCount];
             volatile bool inited;
             MMLock() :
-                    writing_pid(0), reading_count(0), inited(false)
+                    writer_pid(0), inited(false)
             {
+                memset(readers, 0, sizeof(ReaderCount) * kMaxReaderProcCount);
             }
     };
 
@@ -127,10 +134,6 @@ namespace mmkv
             {
                 mlock(value_space, meta->size - meta->init_key_space_size);
             }
-        }
-        if (m_open_options.verify)
-        {
-            m_named_objs->verify();
         }
         return 0;
     }
@@ -170,13 +173,6 @@ namespace mmkv
             return -1;
         }
         m_global_lock = (MMLock*) locks_buf.buf;
-        if (open_options.verify)
-        {
-            if (!Verify())
-            {
-                return -1;
-            }
-        }
 
         if (!m_global_lock->inited)
         {
@@ -200,6 +196,9 @@ namespace mmkv
         m_data_buf = data_buf.buf;
         m_open_options = open_options;
         ReCreate(open_ret == 1);
+        Verify();
+        //get g_reader_count_index
+        GetReaderCountIndex();
         PostInit();
         return 0;
     }
@@ -271,7 +270,7 @@ namespace mmkv
         if (top_size < space_size)
         {
             size_t new_size = meta->file_size * 2;
-            while(new_size < space_size)
+            while (new_size < space_size)
             {
                 new_size += meta->file_size * 2;
             }
@@ -358,9 +357,9 @@ namespace mmkv
         {
             return true;
         }
-        if(!in_keyspace) //try int encoding in value space
+        if (!in_keyspace) //try int encoding in value space
         {
-            if(obj.SetInteger(value))
+            if (obj.SetInteger(value))
             {
                 return true;
             }
@@ -413,6 +412,24 @@ namespace mmkv
     {
         return m_value_allocator;
     }
+
+    int MemorySegmentManager::GetReaderCountIndex()
+    {
+        if (g_reader_count_index != -1)
+        {
+            return g_reader_count_index;
+        }
+        for (int i = 0; i < kMaxReaderProcCount; i++)
+        {
+            if (m_global_lock->readers[i].pid == get_current_pid() || m_global_lock->readers[i].pid == 0)
+            {
+                m_global_lock->readers[i].pid = get_current_pid();
+                g_reader_count_index = i;
+                return i;
+            }
+        }
+        return 0;
+    }
     bool MemorySegmentManager::Lock(LockMode mode)
     {
         if (!LockEnable())
@@ -427,12 +444,12 @@ namespace mmkv
         bool ret = lock->lock.Lock(mode);
         if (mode == WRITE_LOCK && ret)
         {
-            lock->writing_pid = get_current_pid();
+            lock->writer_pid = get_current_pid();
             g_lock_state.SetValue(WRITE_LOCKED);
         }
         else
         {
-            atomic_add(&lock->reading_count, 1);
+            atomic_add(&(lock->readers[GetReaderCountIndex()].count), 1);
             g_lock_state.SetValue(READ_LOCKED);
         }
         return ret;
@@ -450,11 +467,11 @@ namespace mmkv
         }
         if (mode == WRITE_LOCK)
         {
-            lock->writing_pid = 0;
+            lock->writer_pid = 0;
         }
         else
         {
-            atomic_add(&lock->reading_count, -1);
+            atomic_add(&(lock->readers[GetReaderCountIndex()].count), -1);
         }
         bool ret = lock->lock.Unlock(mode);
         g_lock_state.SetValue(UNLOCKED);
@@ -473,18 +490,36 @@ namespace mmkv
 
     bool MemorySegmentManager::Verify()
     {
-        if (m_global_lock->writing_pid != 0)
+        if (m_global_lock->writer_pid != 0)
         {
-            if (kill(m_global_lock->writing_pid, 0) != 0)
+            if (kill(m_global_lock->writer_pid, 0) != 0)
             {
                 ERROR_LOG("Old write process crashed while writing.");
                 return false;
             }
         }
+        //clear dead readers lock state
+        for (int i = 0; i < kMaxReaderProcCount; i++)
+        {
+            if (m_global_lock->readers[i].pid > 0)
+            {
+                if (kill(m_global_lock->readers[i].pid, 0) != 0)
+                {
+                    while (m_global_lock->readers[i].count > 0)
+                    {
+                        m_global_lock->lock.Unlock(READ_LOCK);
+                        m_global_lock->readers[i].count--;
+                    }
+                    m_global_lock->readers[i].pid = 0;
+                }
+            }
+        }
+        m_named_objs->verify();
         return true;
     }
 
-    static int dump_cksum_str(XXH64_state_t* cksm64, XXH32_state_t* cksm32, const std::string& dir, std::string& cksm)
+    static int dump_cksum_str(XXH64_state_t* cksm64, XXH32_state_t* cksm32, const std::string& cksm_file,
+            std::string& cksm)
     {
         char xxhashsum[256];
         uint32_t offset = 0;
@@ -501,7 +536,7 @@ namespace mmkv
             offset += ret;
         }
         cksm = xxhashsum;
-        FILE* dest_file = fopen((dir + "/xxhash.cksm").c_str(), "w");
+        FILE* dest_file = fopen(cksm_file.c_str(), "w");
         if (NULL == dest_file)
         {
             return -1;
@@ -519,7 +554,7 @@ namespace mmkv
         XXH64_update(cksm64, data, len);
     }
 
-    int MemorySegmentManager::Backup(const std::string& dir)
+    int MemorySegmentManager::Backup(const std::string& path)
     {
         int err = 0;
         if (NULL == m_data_buf)
@@ -527,7 +562,7 @@ namespace mmkv
             ERROR_LOG("Empty data to backup.");
             return -1;
         }
-        make_dir(dir);
+        //make_dir(dir);
         std::string cksm;
         XXH64_state_t* cksm64 = XXH64_createState();
         XXH32_state_t* cksm32 = XXH32_createState();
@@ -541,7 +576,6 @@ namespace mmkv
         uint16_t meta_len = sizeof(Meta);
         Header* header = (Header*) ((char*) m_data_buf + kMetaLength);
         uint32_t header_len = sizeof(Header);
-        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(*this);
         void* key_mspace = (char*) meta + meta->keyspace_offset;
         void* key_space_start = (char*) meta + kMetaLength + kHeaderLength;
         void* key_mspace_top = mspace_top_address(key_mspace);
@@ -549,13 +583,11 @@ namespace mmkv
         void* value_space_start = (char*) meta + kMetaLength + kHeaderLength + meta->init_key_space_size;
         void* value_mspace_top = mspace_top_address(value_mspace);
         uint32_t now = time(NULL);
-        char dest_file_path[dir.size() + 256];
-        sprintf(dest_file_path, "%s/%s", dir.c_str(), kBackupFileName, now);
 
-        FILE* dest_file = fopen(dest_file_path, "w");
+        FILE* dest_file = fopen(path.c_str(), "w");
         if (NULL == dest_file)
         {
-            ERROR_LOG("Failed to open backup file:%s to write.", dest_file_path);
+            ERROR_LOG("Failed to open backup file:%s to write.", path.c_str());
             return -1;
         }
         if (fwrite(&kMagicCode, sizeof(kMagicCode), 1, dest_file) != 1)
@@ -622,7 +654,7 @@ namespace mmkv
             }
         }
 
-        dump_cksum_str(cksm64, cksm32, dir, cksm);
+        dump_cksum_str(cksm64, cksm32, path + ".cksm", cksm);
         INFO_LOG("Snapshot cksm:%s", cksm.c_str());
         _end: fclose(dest_file);
         XXH64_freeState(cksm64);
@@ -630,19 +662,43 @@ namespace mmkv
         return err;
     }
 
-    int MemorySegmentManager::Restore(const std::string& from, const std::string& to)
+    int MemorySegmentManager::Restore(const std::string& from_file)
+    {
+        Meta* meta = (Meta*) m_data_buf;
+        munmap(m_data_buf, meta->file_size);
+        char data_path[m_open_options.dir.size() + 100];
+        sprintf(data_path, "%s/data", m_open_options.dir.c_str());
+        int err =  Restore(from_file, data_path);
+        MMapBuf data_buf(m_logger);
+        if(m_open_options.readonly)
+        {
+            err = data_buf.OpenRead(data_path);
+        }else
+        {
+            err = data_buf.OpenWrite(data_path, 0, false);
+        }
+        if (err < 0)
+        {
+            return -1;
+        }
+        m_data_buf = data_buf.buf;
+        ReCreate(false);
+        PostInit();
+        return err;
+    }
+
+    int MemorySegmentManager::Restore(const std::string& from_file, const std::string& to_file)
     {
         FILE* dest_file = NULL;
         int err = 0;
-        make_dir(to);
         MMapBuf backup(m_logger);
         uint32_t header_space_len = 0, key_space_len = 0, value_space_len = 0;
         size_t chunk_decomp_size = 0;
         size_t buf_cursor = 0;
         char* compressed_key_space = NULL;
         char* compressed_value_space = NULL;
-        std::string from_file = from + "/" + kBackupFileName;
-        std::string to_file = to + "/" + kDataFileName;
+        //std::string from_file = from + "/" + kBackupFileName;
+        //std::string to_file = to + "/" + kDataFileName;
         std::string cksm;
         XXH64_state_t* cksm64 = XXH64_createState();
         XXH32_state_t* cksm32 = XXH32_createState();
@@ -722,7 +778,7 @@ namespace mmkv
         dest_file = fopen(to_file.c_str(), "w");
         if (NULL == dest_file)
         {
-            ERROR_LOG("Failed to open backup file:%s to write.", to.c_str());
+            ERROR_LOG("Failed to open backup file:%s to write.", to_file.c_str());
             err = -1;
             goto _end;
         }
@@ -767,11 +823,13 @@ namespace mmkv
             }
         }
 
-        dump_cksum_str(cksm64, cksm32, to, cksm);
+        dump_cksum_str(cksm64, cksm32, to_file + ".cksm", cksm);
         INFO_LOG("Restore cksm:%s", cksm.c_str());
         _end: backup.Close();
         if (NULL != dest_file)
         {
+            fflush(dest_file);
+            fsync(fileno(dest_file));
             fclose(dest_file);
         }
         XXH64_freeState(cksm64);
@@ -779,10 +837,10 @@ namespace mmkv
         return err;
     }
 
-    bool MemorySegmentManager::CheckEqual(const std::string& dir)
+    bool MemorySegmentManager::CheckEqual(const std::string& file)
     {
         MMapBuf cmpbuf(m_logger, true);
-        if (0 != cmpbuf.OpenRead(dir + "/" + kDataFileName))
+        if (0 != cmpbuf.OpenRead(file))
         {
             ERROR_LOG("Failed to load compare file.");
             return false;

@@ -167,6 +167,25 @@ namespace mmkv
 
     };
 
+    class Iterator
+    {
+        private:
+            void* m_cursor;
+        public:
+            Iterator(void* cursor);
+            bool Valid();
+            DBID GetDBID();
+            int GetKey(std::string& key);
+            uint64_t GetKeyTTL();
+            ObjectType GetValueType();
+            size_t ValueLength();
+            int GetStringValue(std::string& value);
+            int GetHashEntry(std::string& field, std::string& value);
+            int GetZSetEntry(long double& score, std::string& value);
+            void Next();
+            ~Iterator();
+    };
+
     typedef void PODestructor(void* p);
     template<typename T>
     struct PODDestructorTemplate
@@ -352,7 +371,8 @@ namespace mmkv
             virtual int RandomKey(DBID db, std::string& key)= 0;
             virtual int Rename(DBID db, const Data& key, const Data& new_key)= 0;
             virtual int RenameNX(DBID db, const Data& key, const Data& new_key)= 0;
-            virtual int64_t Scan(DBID db, int64_t cursor, const std::string& pattern, int32_t limit_count, const StringArrayResult& result)= 0;
+            virtual int64_t Scan(DBID db, int64_t cursor, const std::string& pattern, int32_t limit_count,
+                    const StringArrayResult& result)= 0;
             virtual int64_t TTL(DBID db, const Data& key)= 0;
             virtual int Persist(DBID db, const Data& key)= 0;
             virtual int Type(DBID db, const Data& key)= 0;
@@ -406,7 +426,8 @@ namespace mmkv
             virtual int HGet(DBID db, const Data& key, const Data& field, std::string& val)= 0;
             virtual int HGetAll(DBID db, const Data& key, const StringArrayResult& vals)= 0;
             virtual int HIncrBy(DBID db, const Data& key, const Data& field, int64_t increment, int64_t& new_val)= 0;
-            virtual int HIncrByFloat(DBID db, const Data& key, const Data& field, long double increment, long double& new_val)= 0;
+            virtual int HIncrByFloat(DBID db, const Data& key, const Data& field, long double increment,
+                    long double& new_val)= 0;
             virtual int HKeys(DBID db, const Data& key, const StringArrayResult& fields)= 0;
             virtual int HLen(DBID db, const Data& key)= 0;
             virtual int HMGet(DBID db, const Data& key, const DataArray& fields, const StringArrayResult& vals)= 0;
@@ -470,7 +491,7 @@ namespace mmkv
             virtual int SInter(DBID db, const DataArray& keys, const StringArrayResult& inters)= 0;
             virtual int SInterStore(DBID db, const Data& destination, const DataArray& keys)= 0;
             virtual int SIsMember(DBID db, const Data& key, const Data& member)= 0;
-            virtual int SMembers(DBID db, const Data& key,const StringArrayResult& members)= 0;
+            virtual int SMembers(DBID db, const Data& key, const StringArrayResult& members)= 0;
             virtual int SMove(DBID db, const Data& source, const Data& destination, const Data& member)= 0;
             virtual int SPop(DBID db, const Data& key, const StringArrayResult& members, int count = 1)= 0;
             virtual int SRandMember(DBID db, const Data& key, const StringArrayResult& members, int count = 1)= 0;
@@ -489,8 +510,8 @@ namespace mmkv
              */
             virtual int ZAdd(DBID db, const Data& key, const ScoreDataArray& vals, bool nx = false, bool xx = false,
                     bool ch = false, bool incr = false)= 0;
-            inline int ZAdd(DBID db, const Data& key, long double score, const Data& val, bool nx = false, bool xx = false,
-                    bool ch = false, bool incr = false)
+            inline int ZAdd(DBID db, const Data& key, long double score, const Data& val, bool nx = false, bool xx =
+                    false, bool ch = false, bool incr = false)
             {
                 ScoreData sd;
                 sd.score = score;
@@ -499,9 +520,11 @@ namespace mmkv
             }
             virtual int ZCard(DBID db, const Data& key)= 0;
             virtual int ZCount(DBID db, const Data& key, const std::string& min, const std::string& max)= 0;
-            virtual int ZIncrBy(DBID db, const Data& key, long double increment, const Data& member, long double& new_score)= 0;
+            virtual int ZIncrBy(DBID db, const Data& key, long double increment, const Data& member,
+                    long double& new_score)= 0;
             virtual int ZLexCount(DBID db, const Data& key, const std::string& min, const std::string& max)= 0;
-            virtual int ZRange(DBID db, const Data& key, int start, int stop, bool with_scores, const StringArrayResult& vals)= 0;
+            virtual int ZRange(DBID db, const Data& key, int start, int stop, bool with_scores,
+                    const StringArrayResult& vals)= 0;
             virtual int ZRangeByLex(DBID db, const Data& key, const std::string& min, const std::string& max,
                     int limit_offset, int limit_count, const StringArrayResult& vals)= 0;
             virtual int ZRangeByScore(DBID db, const Data& key, const std::string& min, const std::string& max,
@@ -531,12 +554,14 @@ namespace mmkv
                     const std::string& aggregate)= 0;
 
             virtual int GeoAdd(DBID db, const Data& key, const Data& coord_type, const GeoPointArray& points)= 0;
-            virtual int GeoAdd(DBID db, const Data& key, const Data& coord_type, long double x, long double y, const Data& point)
+            virtual int GeoAdd(DBID db, const Data& key, const Data& coord_type, long double x, long double y,
+                    const Data& point)
             {
                 GeoPoint p(x, y, point);
                 return GeoAdd(db, key, coord_type, GeoPointArray(1, p));
             }
-            virtual int GeoSearch(DBID db, const Data& key, const GeoSearchOptions& options, const StringArrayResult& results)= 0;
+            virtual int GeoSearch(DBID db, const Data& key, const GeoSearchOptions& options,
+                    const StringArrayResult& results)= 0;
 
             /*
              *
@@ -638,10 +663,13 @@ namespace mmkv
 
             virtual int RemoveExpiredKeys(uint32_t max_removed = 10000, uint32_t max_time = 100) = 0;
 
-            virtual int Backup(const std::string& dir) = 0;
-            virtual int Restore(const std::string& backup_dir, const std::string& to_dir) = 0;
-            virtual bool CompareDataStore(const std::string& dir) = 0;
+            virtual int Backup(const std::string& dest_file) = 0;
+            virtual int Restore(const std::string& from_file) = 0;
+            //virtual int Restore(const std::string& backup_dir, const std::string& to_dir) = 0;
+            //virtual bool CompareDataStore(const std::string& file) = 0;
             virtual int EnsureWritableSpace(size_t space_size) = 0;
+
+            virtual Iterator* NewIterator() = 0;
             virtual ~MMKV()
             {
             }

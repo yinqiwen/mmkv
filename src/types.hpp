@@ -33,7 +33,6 @@
 #include <boost/interprocess/containers/list.hpp>
 #include "cpp-btree/btree_map.h"
 #include "cpp-btree/btree_set.h"
-#include "khash.hh"
 #include "lz4/xxhash.h"
 #include "utils.hpp"
 #include "mmkv.hpp"

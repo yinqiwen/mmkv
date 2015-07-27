@@ -170,7 +170,7 @@ namespace mmkv
             }
 
             /* Fast path, only readers */
-            if ((((unsigned) val) == 1 + 2) && (val >> 33))
+            if ((((uint32_t) val) == 1 + 2) && (val >> 33))
             {
                 if (cmpxchg(&m_lock.lock.l, val, val + (1ULL << 33)) == val)
                     return true;

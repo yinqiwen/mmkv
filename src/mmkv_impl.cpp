@@ -540,9 +540,9 @@ namespace mmkv
         for (size_t i = 0; i < keys.size(); i++)
         {
             int err = GenericDel(kv, Object(keys[i], false));
-            if(err < 0)
+            if (err < 0)
             {
-                if(keys.size() == 1)
+                if (keys.size() == 1)
                 {
                     return err;
                 }
@@ -818,7 +818,7 @@ namespace mmkv
             pos++;
             it++;
         }
-        return it == kv->end()?0:pos;
+        return it == kv->end() ? 0 : pos;
     }
 
     int64_t MMKVImpl::DBSize(DBID db)
@@ -915,18 +915,30 @@ namespace mmkv
         return removed;
     }
 
-    int MMKVImpl::Backup(const std::string& dir)
+    int MMKVImpl::Backup(const std::string& file)
     {
-        return m_segment.Backup(dir);
+        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
+        return m_segment.Backup(file);
     }
-    int MMKVImpl::Restore(const std::string& backup_dir, const std::string& to_dir)
+    int MMKVImpl::Restore(const std::string& from_file)
     {
-        return m_segment.Restore(backup_dir, to_dir);
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        int err = m_segment.Restore(from_file);
+        m_kvs.clear();
+        m_ttlset = NULL;
+        m_ttlmap = NULL;
+        ReOpen(false);
+        return err;
     }
-    bool MMKVImpl::CompareDataStore(const std::string& dir)
-    {
-        return m_segment.CheckEqual(dir);
-    }
+//    int MMKVImpl::Restore(const std::string& backup_dir, const std::string& to_dir)
+//    {
+//        return m_segment.Restore(backup_dir, to_dir);
+//    }
+//    bool MMKVImpl::CompareDataStore(const std::string& file)
+//    {
+//        RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
+//        return m_segment.CheckEqual(file);
+//    }
 
     int MMKVImpl::EnsureWritableValueSpace(size_t space_size)
     {

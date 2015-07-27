@@ -50,6 +50,7 @@ namespace mmkv
             int minex, maxex; /* are min or max exclusive? */
     } zrangespec;
     typedef std::vector<zrangespec> ZRangeSpecArray;
+    struct IteratorCursor;
     class MMKVImpl: public MMKV
     {
         private:
@@ -67,6 +68,9 @@ namespace mmkv
             PODestructorTable m_destructors;
 
             OpenOptions m_options;
+
+            friend class IteratorCursor;
+            friend class Iterator;
 
             void* Malloc(size_t size);
             void Free(void* p);
@@ -365,10 +369,12 @@ namespace mmkv
 
             int RemoveExpiredKeys(uint32_t max_removed , uint32_t max_time);
 
-            int Backup(const std::string& dir);
-            int Restore(const std::string& backup_dir, const std::string& to_dir);
-            bool CompareDataStore(const std::string& dir);
+            int Backup(const std::string& path);
+            int Restore(const std::string& from_file);
+            //int Restore(const std::string& backup_dir, const std::string& to_dir);
+            //bool CompareDataStore(const std::string& dir);
             int EnsureWritableSpace(size_t space_size);
+            Iterator* NewIterator();
             ~MMKVImpl();
     };
 

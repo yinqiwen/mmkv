@@ -66,6 +66,8 @@ namespace mmkv
             }
             int PostInit();
             int Expand(size_t new_size);
+            int GetReaderCountIndex();
+            int Restore(const std::string& from_dir, const std::string& to_dir);
         public:
             MemorySegmentManager();
             void SetLogger(const Logger& logger);
@@ -167,9 +169,10 @@ namespace mmkv
             bool LockEnable();
 
             bool Verify();
-            int Backup(const std::string& dir);
-            int Restore(const std::string& from_dir, const std::string& to_dir);
-            bool CheckEqual(const std::string& dir);
+            int Backup(const std::string& path);
+            int Restore(const std::string& from_file);
+
+            bool CheckEqual(const std::string& file);
 
     };
 }

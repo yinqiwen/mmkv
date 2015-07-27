@@ -183,6 +183,9 @@ namespace mmkv
             bool Lock(LockMode mode);
             bool Unlock(LockMode mode = WRITE_LOCK);
     };
+
+
+
 }
 
 #endif /* LOCKS_HPP_ */

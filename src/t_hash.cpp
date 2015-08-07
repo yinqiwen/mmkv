@@ -39,7 +39,11 @@ namespace mmkv
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         StringHashTable* hash = GetObject<StringHashTable>(db, key, V_TYPE_HASH, false, err)();
-        if (NULL == hash || 0 != err)
+        if(IS_NOT_EXISTS(err))
+        {
+            return 0;
+        }
+        if (0 != err)
         {
             return err;
         }
@@ -49,11 +53,16 @@ namespace mmkv
             StringHashTable::iterator found = hash->find(Object(fields[i], true));
             if (found != hash->end())
             {
-                DestroyObjectContent(found->first);
+                Object field = found->first; //copy this field, since later hashmap would use this value for delete entry
                 DestroyObjectContent(found->second);
                 hash->erase(found);
+                DestroyObjectContent(field);
                 removed++;
             }
+        }
+        if (hash->empty())
+        {
+            GenericDel(GetMMKVTable(db, false), db, Object(key, false));
         }
         return removed;
     }
@@ -100,7 +109,11 @@ namespace mmkv
         int err = 0;
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         StringHashTable* hash = GetObject<StringHashTable>(db, key, V_TYPE_HASH, false, err)();
-        if (NULL == hash || 0 != err)
+        if (IS_NOT_EXISTS(err))
+        {
+            return 0;
+        }
+        if (0 != err)
         {
             return err;
         }
@@ -224,7 +237,11 @@ namespace mmkv
         int err = 0;
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         StringHashTable* hash = GetObject<StringHashTable>(db, key, V_TYPE_HASH, false, err)();
-        if (NULL == hash || 0 != err)
+        if (IS_NOT_EXISTS(err))
+        {
+            return 0;
+        }
+        if (0 != err)
         {
             return err;
         }
@@ -254,22 +271,33 @@ namespace mmkv
         }
         return hash->size();
     }
-    int MMKVImpl::HMGet(DBID db, const Data& key, const DataArray& fields, const StringArrayResult& vals)
+    int MMKVImpl::HMGet(DBID db, const Data& key, const DataArray& fields, const StringArrayResult& vals, BooleanArray* get_flags)
     {
         int err = 0;
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         StringHashTable* hash = GetObject<StringHashTable>(db, key, V_TYPE_HASH, false, err)();
-        if (NULL == hash || 0 != err)
+        if (0 != err && !IS_NOT_EXISTS(err))
         {
             return err;
         }
+        if(NULL != get_flags)
+        {
+            get_flags->resize(fields.size());
+        }
         for (size_t i = 0; i < fields.size(); i++)
         {
-            StringHashTable::iterator found = hash->find(Object(fields[i], true));
             std::string& val = vals.Get();
-            if (found != hash->end())
+            if(NULL != hash)
             {
-                found->second.ToString(val);
+                StringHashTable::iterator found = hash->find(Object(fields[i], true));
+                if (found != hash->end())
+                {
+                    found->second.ToString(val);
+                    if(NULL != get_flags)
+                    {
+                        (*get_flags)[i] = true;
+                    }
+                }
             }
         }
         return 0;
@@ -371,7 +399,7 @@ namespace mmkv
         {
             if (nx)
             {
-                return ERR_ENTRY_EXISTED;
+                return 0;
             }
             DestroyObjectContent(ret.first->second);
         }
@@ -403,7 +431,11 @@ namespace mmkv
         int err = 0;
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         StringHashTable* hash = GetObject<StringHashTable>(db, key, V_TYPE_HASH, false, err)();
-        if (NULL == hash || 0 != err)
+        if (IS_NOT_EXISTS(err))
+        {
+            return 0;
+        }
+        if (0 != err)
         {
             return err;
         }

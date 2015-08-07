@@ -170,6 +170,9 @@ namespace mmkv
                     uint8_t contend;
             } read_wait;
     };
+    /*
+     * WARNING: this lock can NOT be used recursive
+     */
     class SleepingRWLock
     {
         private:

@@ -110,17 +110,8 @@ namespace mmkv
                 current_zset = NULL;
                 return false;
             }
-            void Next()
+            void NextKey()
             {
-                if (NextList())
-                    return;
-                if (NextHash())
-                    return;
-                if (NextSet())
-                    return;
-                if (NextZSet())
-                    return;
-
                 while (dbid_iter != kv->m_dbid_set->end())
                 {
                     if (NULL == current_table)
@@ -134,6 +125,10 @@ namespace mmkv
                     }
                     if (table_iter != current_table->end())
                     {
+                        current_hash = NULL;
+                        current_zset = NULL;
+                        current_list = NULL;
+                        current_set = NULL;
                         switch (table_iter->second.type)
                         {
                             case V_TYPE_LIST:
@@ -171,6 +166,36 @@ namespace mmkv
                     dbid_iter++;
                 }
             }
+            void NextElement()
+            {
+                switch (table_iter->second.type)
+                {
+                    case V_TYPE_LIST:
+                    {
+                        NextList();
+                        break;
+                    }
+                    case V_TYPE_SET:
+                    {
+                        NextSet();
+                        break;
+                    }
+                    case V_TYPE_ZSET:
+                    {
+                        NextZSet();
+                        break;
+                    }
+                    case V_TYPE_HASH:
+                    {
+                        NextHash();
+                        break;
+                    }
+                    default:
+                    {
+                        break;
+                    }
+                }
+            }
     };
 
     Iterator::Iterator(void* kv) :
@@ -180,7 +205,7 @@ namespace mmkv
         IteratorCursor* cursor = new IteratorCursor(_kv);
         cursor->kv->m_segment.Lock(READ_LOCK);
         m_cursor = cursor;
-        cursor->Next();
+        cursor->NextKey();
     }
     bool Iterator::Valid()
     {
@@ -319,10 +344,15 @@ namespace mmkv
         }
         return -1;
     }
-    void Iterator::Next()
+    void Iterator::NextKey()
     {
         IteratorCursor* cursor = (IteratorCursor*) m_cursor;
-        cursor->Next();
+        cursor->NextKey();
+    }
+    void Iterator::NextValueElement()
+    {
+        IteratorCursor* cursor = (IteratorCursor*) m_cursor;
+        cursor->NextElement();
     }
     Iterator::~Iterator()
     {

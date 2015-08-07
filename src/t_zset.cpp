@@ -295,6 +295,10 @@ namespace mmkv
                 break;
             }
         }
+        if (min_it == zset->set.end())
+        {
+            return 0;
+        }
         int min_rank = btree_rank(zset->set, min_it);
         int max_rank = btree_rank(zset->set, max_it);
         return max_rank - min_rank + 1;
@@ -410,7 +414,7 @@ namespace mmkv
         {
             return err;
         }
-        if (spec->min > spec->max)
+        if (spec->max_empty_type != 1 && spec->min > spec->max)
         {
             return ERR_INVALID_MIN_MAX;
         }
@@ -559,6 +563,20 @@ namespace mmkv
         Object max_cstr(range.max, false);
         sv.value = min_cstr;
         SortedSet::iterator min_it = range.min_empty_type == -1 ? zset->set.begin() : zset->set.lower_bound(sv);
+        if(min_it == zset->set.end())
+        {
+            return 0;
+        }
+        if (range.minex && min_cstr == min_it->value)
+        {
+            min_it++;
+        }
+        if(min_it == zset->set.end())
+        {
+            return 0;
+        }
+        sv.value = max_cstr;
+        SortedSet::iterator max_it = range.max_empty_type == 1 ? zset->set.end() : zset->set.lower_bound(sv);
         if (limit_offset > 0)
         {
             min_it.increment_by(limit_offset);
@@ -571,21 +589,17 @@ namespace mmkv
                 break;
             }
             ScoreValue& tmp = *min_it;
-            int cmpret = tmp.value.Compare(max_cstr);
-            if (range.minex && min_cstr == tmp.value)
-            {
-                min_it++;
-            }
-            else if (cmpret > 0 || (range.maxex && cmpret == 0))
+            if (min_it == max_it && range.maxex && max_it->value == max_cstr)
             {
                 break;
             }
-            else
+            tmp.value.ToString(vals.Get());
+            if (min_it == max_it)
             {
-                tmp.value.ToString(vals.Get());
-                min_it++;
-                count++;
+                break;
             }
+            min_it++;
+            count++;
         }
         return 0;
     }
@@ -718,6 +732,10 @@ namespace mmkv
             DestroyObjectContent(sv.value);
             removed++;
         }
+        if (zset->set.empty())
+        {
+            GenericDel(GetMMKVTable(db, false), db, Object(key, false));
+        }
         return removed;
     }
     int MMKVImpl::ZRemRangeByLex(DBID db, const Data& key, const std::string& min, const std::string& max)
@@ -749,8 +767,8 @@ namespace mmkv
         }
         ScoreValue sv;
         sv.score = zset->set.begin()->score;
-        Object min_cstr(range.min, true);
-        Object max_cstr(range.max, true);
+        Object min_cstr(range.min, false);
+        Object max_cstr(range.max, false);
         sv.value = min_cstr;
         SortedSet::iterator min_it = range.min_empty_type == -1 ? zset->set.begin() : zset->set.lower_bound(sv);
         size_t removed = 0;
@@ -761,17 +779,25 @@ namespace mmkv
             {
                 min_it++;
             }
-            else if (range.maxex && max_cstr == tmp.value)
-            {
-                break;
-            }
             else
             {
-                zset->scores.erase(tmp.value);
-                min_it = zset->set.erase(min_it);
-                DestroyObjectContent(tmp.value);
-                removed++;
+                int cmpret = range.max_empty_type == 1 ? -1 : tmp.value.Compare(max_cstr);
+                if (cmpret > 0 || (cmpret == 0 && range.maxex))
+                {
+                    break;
+                }
+                else
+                {
+                    zset->scores.erase(tmp.value);
+                    min_it = zset->set.erase(min_it);
+                    DestroyObjectContent(tmp.value);
+                    removed++;
+                }
             }
+        }
+        if (zset->set.empty())
+        {
+            GenericDel(GetMMKVTable(db, false), db, Object(key, false));
         }
         return removed;
     }
@@ -816,6 +842,10 @@ namespace mmkv
             zset->scores.erase(sv.value);
             it = zset->set.erase(it);
             DestroyObjectContent(sv.value);
+        }
+        if (zset->set.empty())
+        {
+            GenericDel(GetMMKVTable(db, false), db, Object(key, false));
         }
         return end - start + 1;
     }
@@ -869,9 +899,14 @@ namespace mmkv
             DestroyObjectContent(sv.value);
             remove_count++;
         }
+        if (zset->set.empty())
+        {
+            GenericDel(GetMMKVTable(db, false), db, Object(key, false));
+        }
         return remove_count;
     }
-    int MMKVImpl::ZRevRange(DBID db, const Data& key, int start, int end, bool with_scores, const StringArrayResult& vals)
+    int MMKVImpl::ZRevRange(DBID db, const Data& key, int start, int end, bool with_scores,
+            const StringArrayResult& vals)
     {
         int err;
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
@@ -1164,7 +1199,8 @@ namespace mmkv
                 ss1 = key_str;
                 char score_str[256];
                 snprintf(score_str, sizeof(score_str), "%.17Lg", it->score);
-                std::string& score_string =  vals.Get();;
+                std::string& score_string = vals.Get();
+                ;
                 score_string = score_str;
                 match_count++;
                 if (limit_count > 0 && match_count >= limit_count)

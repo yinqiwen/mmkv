@@ -280,14 +280,15 @@ namespace mmkv
                 {
                     for (size_t j = 0; j < get_patterns.size(); j++)
                     {
-                        int err = GetValueByPattern(kv, get_patterns[j], sortvec[i].value, sortvec[i].value);
+                        Object tmp;
+                        int err = GetValueByPattern(kv, get_patterns[j], sortvec[i].value, tmp);
                         if (err < 0)
                         {
                             ERROR_LOG("Failed to get value by pattern for:%s", get_patterns[j].c_str());
                             return err;
                         }
                         std::string& ss = destination_key.Len() > 0 ? store_tmp_str : results.Get();
-                        sortvec[i].value.ToString(ss);
+                        tmp.ToString(ss);
                         if (destination_key.Len() > 0)
                         {
                             store_list.push_back(ss);
@@ -313,7 +314,7 @@ namespace mmkv
             EnsureWritableValueSpace();
             ObjectAllocator alloc = m_segment.ValueAllocator<Object>();
             int err;
-            StringList* list = GetObject<StringList>(db, destination_key, V_TYPE_LIST, false, err)(alloc);
+            StringList* list = GetObject<StringList>(db, destination_key, V_TYPE_LIST, true, err)(alloc);
             if (0 != err)
             {
                 return err;

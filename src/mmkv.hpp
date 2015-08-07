@@ -182,7 +182,8 @@ namespace mmkv
             int GetStringValue(std::string& value);
             int GetHashEntry(std::string& field, std::string& value);
             int GetZSetEntry(long double& score, std::string& value);
-            void Next();
+            void NextKey();
+            void NextValueElement();
             ~Iterator();
     };
 
@@ -338,6 +339,7 @@ namespace mmkv
             }
     };
     typedef std::vector<GeoPoint> GeoPointArray;
+    typedef std::vector<bool> BooleanArray;
 
     class MMKV
     {
@@ -396,7 +398,7 @@ namespace mmkv
             virtual int Incr(DBID db, const Data& key, int64_t& new_val)= 0;
             virtual int IncrBy(DBID db, const Data& key, int64_t increment, int64_t& new_val)= 0;
             virtual int IncrByFloat(DBID db, const Data& key, long double increment, long double& new_val)= 0;
-            virtual int MGet(DBID db, const DataArray& keys, const StringArrayResult& vals)= 0;
+            virtual int MGet(DBID db, const DataArray& keys, const StringArrayResult& vals, BooleanArray* get_flag = NULL)= 0;
             virtual int MSet(DBID db, const DataPairArray& key_vals)= 0;
             virtual int MSetNX(DBID db, const DataPairArray& key_vals)= 0;
             virtual int PSetNX(DBID db, const Data& key, int64_t milliseconds, const Data& value)= 0;
@@ -430,7 +432,7 @@ namespace mmkv
                     long double& new_val)= 0;
             virtual int HKeys(DBID db, const Data& key, const StringArrayResult& fields)= 0;
             virtual int HLen(DBID db, const Data& key)= 0;
-            virtual int HMGet(DBID db, const Data& key, const DataArray& fields, const StringArrayResult& vals)= 0;
+            virtual int HMGet(DBID db, const Data& key, const DataArray& fields, const StringArrayResult& vals, BooleanArray* get_flag = NULL)= 0;
             virtual int HMSet(DBID db, const Data& key, const DataPairArray& field_vals)= 0;
             virtual int64_t HScan(DBID db, const Data& key, int64_t cursor, const std::string& pattern,
                     int32_t limit_count, const StringArrayResult& results)= 0;

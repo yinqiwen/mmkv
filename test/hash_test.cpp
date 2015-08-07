@@ -40,7 +40,7 @@ TEST(HSetDelExists, Hash)
     CHECK_EQ(int, g_test_kv->HExists(0, "myhash", "field1"), 0, "");
 
     CHECK_EQ(int, g_test_kv->HSet(0, "myhash", "field100", "hello", true), 1, "");
-    CHECK_EQ(int, g_test_kv->HSet(0, "myhash", "field100", "newval", true), mmkv::ERR_ENTRY_EXISTED, "");
+    CHECK_EQ(int, g_test_kv->HSet(0, "myhash", "field100", "newval", true), 0, "");
     std::string v;
     CHECK_EQ(int, g_test_kv->HGet(0, "myhash", "field100", v), 0, "");
     CHECK_EQ(std::string, v, "hello", "");

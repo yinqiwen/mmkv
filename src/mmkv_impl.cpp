@@ -355,13 +355,16 @@ namespace mmkv
         TTLValue entry;
         entry.key.db = db;
         entry.key.key = key;
-        entry.expireat = ttl;
-        if (!m_ttlset->insert(entry).second)
-        {
-            return;
-        }
         value.hasttl = 1;
-        m_ttlmap->insert(TTLValueTable::value_type(entry.key, ttl));
+        std::pair<TTLValueTable::iterator,bool> sit = m_ttlmap->insert(TTLValueTable::value_type(entry.key, ttl));
+        if(!sit.second)
+        {
+            entry.expireat = sit.first->second;
+            m_ttlset->erase(entry);
+            sit.first->second = ttl;
+        }
+        entry.expireat = ttl;
+        m_ttlset->insert(entry);
     }
     uint64_t MMKVImpl::GetTTL(DBID db, const Object& key, const Object& value)
     {
@@ -378,7 +381,8 @@ namespace mmkv
             ABORT("No TTL value found for object");
             return 0;
         }
-        return fit->second;
+        uint64_t now = get_current_micros();
+        return fit->second > now ? fit->second : 0;
     }
 
     int MMKVImpl::GenericDelValue(uint32_t type, void* ptr)
@@ -485,12 +489,13 @@ namespace mmkv
         }
         return err;
     }
-    int MMKVImpl::GenericDel(MMKVTable* table, const Object& key)
+    int MMKVImpl::GenericDel(MMKVTable* table, DBID db, const Object& key)
     {
         MMKVTable::iterator found = table->find(key);
         if (found != table->end())
         {
-            const Object& value_data = found->second;
+            Object& value_data = found->second;
+            ClearTTL(db, key, value_data);
             int err = GenericDelValue(value_data);
             if (0 != err)
             {
@@ -539,7 +544,7 @@ namespace mmkv
         int count = 0;
         for (size_t i = 0; i < keys.size(); i++)
         {
-            int err = GenericDel(kv, Object(keys[i], false));
+            int err = GenericDel(kv, db, Object(keys[i], false));
             if (err < 0)
             {
                 if (keys.size() == 1)
@@ -579,12 +584,12 @@ namespace mmkv
         MMKVTable* kv = GetMMKVTable(db, false);
         if (NULL == kv)
         {
-            return ERR_ENTRY_NOT_EXIST;
+            return 0;
         }
         const Object* value_data = FindMMValue(kv, key);
         if (NULL == value_data)
         {
-            return ERR_ENTRY_NOT_EXIST;
+            return 0;
         }
         return 1;
     }
@@ -611,7 +616,8 @@ namespace mmkv
 
     int64_t MMKVImpl::TTL(DBID db, const Data& key)
     {
-        return PTTL(db, key) / 1000;
+        int64_t pttl = PTTL(db, key);
+        return pttl > 0 ? pttl / 1000:pttl;
     }
     int64_t MMKVImpl::PTTL(DBID db, const Data& key)
     {
@@ -619,14 +625,14 @@ namespace mmkv
         MMKVTable* kv = GetMMKVTable(db, false);
         if (NULL == kv)
         {
-            return 0;
+            return -2;
         }
         const Object* value_data = FindMMValue(kv, key);
         if (NULL == value_data)
         {
-            return 0;
+            return -2;
         }
-        return value_data->hasttl ? GetTTL(db, Object(key, false), *value_data) / 1000 : 0;
+        return value_data->hasttl ? (GetTTL(db, Object(key, false), *value_data) - get_current_micros()) / 1000 : -1;
     }
     int MMKVImpl::Expire(DBID db, const Data& key, uint32_t secs)
     {
@@ -647,16 +653,16 @@ namespace mmkv
         MMKVTable* kv = GetMMKVTable(db, false);
         if (NULL == kv)
         {
-            return ERR_ENTRY_NOT_EXIST;
+            return 0;
         }
         Object key_obj(key, false);
         MMKVTable::iterator found = kv->find(key_obj);
         if (found == kv->end())
         {
-            return ERR_ENTRY_NOT_EXIST;
+            return 0;
         }
-        SetTTL(db, key_obj, found->second, milliseconds_timestamp * 1000);
-        return 0;
+        SetTTL(db, found->first, found->second, milliseconds_timestamp * 1000);
+        return 1;
     }
 
     int MMKVImpl::GenericMoveKey(DBID src_db, const Data& src_key, DBID dest_db, const Data& dest_key, bool nx)
@@ -664,6 +670,10 @@ namespace mmkv
         if (m_readonly)
         {
             return ERR_PERMISSION_DENIED;
+        }
+        if (src_db == dest_db && src_key == dest_key)
+        {
+            return nx ? 0 : 1;
         }
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         EnsureWritableValueSpace();
@@ -677,7 +687,7 @@ namespace mmkv
         MMKVTable::iterator found = src_kv->find(src_key_obj);
         if (found == src_kv->end())
         {
-            return 0;
+            return ERR_ENTRY_NOT_EXIST;
         }
 
         Object tmpkey2(dest_key, false);
@@ -843,14 +853,13 @@ namespace mmkv
         {
             return 0;
         }
+
         MMKVTable::iterator it = kv->begin();
         while (it != kv->end())
         {
-            //if (it.isfilled())
-            {
-                DestroyObjectContent(it->first);
-                GenericDelValue(it->second);
-            }
+            ClearTTL(db, it->first, it->second);
+            DestroyObjectContent(it->first);
+            GenericDelValue(it->second);
             it++;
         }
         kv->clear();
@@ -898,18 +907,18 @@ namespace mmkv
             MMKVTable* kv = GetMMKVTable(it->key.db, false);
             if (NULL == kv)
             {
-                ERROR_LOG("Invalid entry for empty kv");
+                ERROR_LOG("Invalid entry for empty kv:%u", it->key.db);
             }
             else
             {
-                int err = GenericDel(kv, it->key.key);
-                if (0 != err)
+                m_ttlmap->erase(it->key);
+                int err = GenericDel(kv, it->key.db, it->key.key);
+                if (err <= 0)
                 {
                     ERROR_LOG("Invalid entry for delete error:%d", err);
                 }
+                m_ttlset->erase(it);
             }
-            m_ttlmap->erase(it->key);
-            m_ttlset->erase(it);
             removed++;
         }
         return removed;

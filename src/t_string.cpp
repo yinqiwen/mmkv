@@ -34,14 +34,15 @@
 namespace mmkv
 {
     Object& MMKVImpl::FindOrCreateStringValue(MMKVTable* table, const Data& key, const Data& create_base_value,
-            bool reserve_ttl, bool& created)
+            bool& created)
     {
         Object tmpkey(key, false);
         std::pair<MMKVTable::iterator, bool> ret = table->insert(MMKVTable::value_type(tmpkey, Object()));
-        Object& value_data = const_cast<Object&>(ret.first->second);
+        Object& value_data = ret.first->second;
         if (ret.second)
         {
             m_segment.AssignObjectValue(value_data, create_base_value, false);
+            m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), key, true);
             created = true;
         }
         else
@@ -165,7 +166,7 @@ namespace mmkv
             return ERR_ENTRY_NOT_EXIST;
         }
         bool created = false;
-        Object& value_data = FindOrCreateStringValue(kv, key, value, false, created);
+        Object& value_data = FindOrCreateStringValue(kv, key, value, created);
         if (!created)
         {
             if (value_data.type != V_TYPE_STRING)
@@ -204,7 +205,7 @@ namespace mmkv
             return ERR_ENTRY_NOT_EXIST;
         }
         bool created = false;
-        Object& value_data = FindOrCreateStringValue(kv, key, value, false, created);
+        Object& value_data = FindOrCreateStringValue(kv, key, value, created);
         if (!created)
         {
             if (value_data.type != V_TYPE_STRING)
@@ -219,8 +220,9 @@ namespace mmkv
             ClearTTL(db, tmpkey, value_data);
             DestroyObjectContent(value_data);
             m_segment.AssignObjectValue(value_data, value, false);
+            return 0;
         }
-        return 0;
+        return 1; //create new entry
     }
 
     int MMKVImpl::Strlen(DBID db, const Data& key)
@@ -404,17 +406,28 @@ namespace mmkv
         m_segment.AssignObjectValue(value_data, Data(buf, len), false);
         return 0;
     }
-    int MMKVImpl::MGet(DBID db, const DataArray& keys, const StringArrayResult& vals)
+    int MMKVImpl::MGet(DBID db, const DataArray& keys, const StringArrayResult& vals, BooleanArray* get_flags)
     {
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         MMKVTable* kv = GetMMKVTable(db, false);
-        if (NULL == kv)
+        if (NULL != get_flags)
         {
-            return ERR_ENTRY_NOT_EXIST;
+            get_flags->resize(keys.size());
         }
         for (size_t i = 0; i < keys.size(); i++)
         {
-            GenericGet(kv, db, keys[i], vals.Get());
+            if (NULL == kv)
+            {
+                vals.Get();
+            }
+            else
+            {
+                int err = GenericGet(kv, db, keys[i], vals.Get());
+                if (NULL != get_flags && 0 == err)
+                {
+                    (*get_flags)[i] = true;
+                }
+            }
         }
         return 0;
     }
@@ -488,7 +501,7 @@ namespace mmkv
         }
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         EnsureWritableValueSpace();
-        MMKVTable* kv = GetMMKVTable(db, false);
+        MMKVTable* kv = GetMMKVTable(db, true);
         if (NULL == kv)
         {
             return ERR_ENTRY_NOT_EXIST;
@@ -508,6 +521,7 @@ namespace mmkv
         }
         else
         {
+            memset(value_data.data, 0, sizeof(value_data.data));
             m_segment.AssignObjectValue(const_cast<Object&>(kk), key, true);
             m_segment.ObjectMakeRoom(value_data, offset + value.Len(), false);
         }

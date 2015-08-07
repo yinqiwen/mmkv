@@ -49,7 +49,7 @@ namespace mmkv
         EnsureWritableValueSpace();
         ObjectAllocator allocator = m_segment.ValueAllocator<Object>();
         StringSet* set = GetObject<StringSet>(db, key, V_TYPE_SET, true, err)(std::less<Object>(), allocator);
-        if (NULL == set || 0 != err)
+        if (0 != err)
         {
             return err;
         }
@@ -74,14 +74,15 @@ namespace mmkv
         {
             return 0;
         }
-        if (NULL == set || 0 != err)
+        if (0 != err)
         {
             return err;
         }
         return set->size();
     }
 
-    int MMKVImpl::GenericSInterDiffUnion(DBID db, int op, const DataArray& keys, const Data* dest, const StringArrayResult* res)
+    int MMKVImpl::GenericSInterDiffUnion(DBID db, int op, const DataArray& keys, const Data* dest,
+            const StringArrayResult* res)
     {
         StdObjectSet results[2];
         int result_index = 0;
@@ -93,13 +94,15 @@ namespace mmkv
         StdObjectSet* result = NULL;
         StdObjectSet* cmp = NULL;
         int current_result_index = 0;
+        ObjectAllocator allocator = m_segment.ValueAllocator<Object>();
+        StringSet empty_set(std::less<Object>(), allocator);
 
         for (size_t i = 0; i < keys.size(); i++)
         {
             StringSet* set = GetObject<StringSet>(db, keys[i], V_TYPE_SET, false, err)();
             if (IS_NOT_EXISTS(err))
             {
-                sets[i] = NULL;
+                sets[i] = &empty_set;
                 continue;
             }
             if (0 != err)
@@ -140,7 +143,7 @@ namespace mmkv
         for (size_t i = start_index + 1; i < keys.size(); i++)
         {
             result = results + current_result_index;
-            if (NULL == sets[i])
+            if (sets[i]->empty())
             {
                 if (op == OP_INTER)
                 {
@@ -149,69 +152,65 @@ namespace mmkv
                     goto _end;
                 }
             }
-            else
+            result->clear();
+            switch (op)
             {
-                result->clear();
-                switch (op)
+                case OP_DIFF:
                 {
-                    case OP_DIFF:
+                    if (cmp == NULL)
                     {
-                        if (cmp == NULL)
-                        {
-                            std::set_difference(sets[start_index]->begin(), sets[start_index]->end(), sets[i]->begin(),
-                                    sets[i]->end(), std::inserter(*result, result->end()), std::less<Object>());
-                        }
-                        else
-                        {
-                            std::set_difference(cmp->begin(), cmp->end(), sets[i]->begin(), sets[i]->end(),
-                                    std::inserter(*result, result->end()), std::less<Object>());
-                        }
-                        if (result->empty())
-                        {
-                            result_index = current_result_index;
-                            goto _end;
-                        }
-                        break;
+                        std::set_difference(sets[start_index]->begin(), sets[start_index]->end(), sets[i]->begin(),
+                                sets[i]->end(), std::inserter(*result, result->end()), std::less<Object>());
                     }
-                    case OP_INTER:
+                    else
                     {
-                        if (cmp == NULL)
-                        {
-                            std::set_intersection(sets[start_index]->begin(), sets[start_index]->end(),
-                                    sets[i]->begin(), sets[i]->end(), std::inserter(*result, result->end()),
-                                    std::less<Object>());
-                        }
-                        else
-                        {
-                            std::set_intersection(cmp->begin(), cmp->end(), sets[i]->begin(), sets[i]->end(),
-                                    std::inserter(*result, result->end()), std::less<Object>());
-                        }
-
-                        if (result->empty())
-                        {
-                            result_index = current_result_index;
-                            goto _end;
-                        }
-                        break;
+                        std::set_difference(cmp->begin(), cmp->end(), sets[i]->begin(), sets[i]->end(),
+                                std::inserter(*result, result->end()), std::less<Object>());
                     }
-                    case OP_UNION:
+                    if (result->empty())
                     {
-                        if (cmp == NULL)
-                        {
-                            std::set_union(sets[start_index]->begin(), sets[start_index]->end(), sets[i]->begin(),
-                                    sets[i]->end(), std::inserter(*result, result->end()), std::less<Object>());
-                        }
-                        else
-                        {
-                            std::set_union(cmp->begin(), cmp->end(), sets[i]->begin(), sets[i]->end(),
-                                    std::inserter(*result, result->end()), std::less<Object>());
-                        }
-                        break;
+                        result_index = current_result_index;
+                        goto _end;
                     }
+                    break;
                 }
-                current_result_index = 1 - current_result_index;
-                cmp = result;
+                case OP_INTER:
+                {
+                    if (cmp == NULL)
+                    {
+                        std::set_intersection(sets[start_index]->begin(), sets[start_index]->end(), sets[i]->begin(),
+                                sets[i]->end(), std::inserter(*result, result->end()), std::less<Object>());
+                    }
+                    else
+                    {
+                        std::set_intersection(cmp->begin(), cmp->end(), sets[i]->begin(), sets[i]->end(),
+                                std::inserter(*result, result->end()), std::less<Object>());
+                    }
+
+                    if (result->empty())
+                    {
+                        result_index = current_result_index;
+                        goto _end;
+                    }
+                    break;
+                }
+                case OP_UNION:
+                {
+                    if (cmp == NULL)
+                    {
+                        std::set_union(sets[start_index]->begin(), sets[start_index]->end(), sets[i]->begin(),
+                                sets[i]->end(), std::inserter(*result, result->end()), std::less<Object>());
+                    }
+                    else
+                    {
+                        std::set_union(cmp->begin(), cmp->end(), sets[i]->begin(), sets[i]->end(),
+                                std::inserter(*result, result->end()), std::less<Object>());
+                    }
+                    break;
+                }
             }
+            current_result_index = 1 - current_result_index;
+            cmp = result;
         }
         result_index = result == results ? 0 : 1;
         _end: if (NULL != res)
@@ -353,11 +352,15 @@ namespace mmkv
             {
                 DestroyObjectContent(val);
             }
+            if (set1->empty())
+            {
+                GenericDel(GetMMKVTable(db, false),db, Object(source, false));
+            }
             return 1;
         }
         return 0;
     }
-    int MMKVImpl::SPop(DBID db, const Data& key,  const StringArrayResult& members, int count)
+    int MMKVImpl::SPop(DBID db, const Data& key, const StringArrayResult& members, int count)
     {
         if (m_readonly)
         {
@@ -365,7 +368,7 @@ namespace mmkv
         }
         if (count < 0)
         {
-            return ERR_INVALID_NUMBER;
+            return ERR_OFFSET_OUTRANGE;
         }
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
@@ -383,15 +386,17 @@ namespace mmkv
         {
             return 0;
         }
-        for (int i = 0; i < count; i++)
+        for (int i = 0; i < count && !set->empty(); i++)
         {
-            int rand = random_between_int32(0, set->size() - 1);
             StringSet::iterator it = set->begin();
-            it.increment_by(rand);
             it->ToString(members.Get());
             Object cc = *it;
             set->erase(it);
             DestroyObjectContent(cc);
+        }
+        if (set->empty())
+        {
+            GenericDel(GetMMKVTable(db, false), db, Object(key, false));
         }
         return 0;
     }
@@ -412,18 +417,36 @@ namespace mmkv
         {
             return 0;
         }
-        std::set<int> uniq_set;
+
+        //return whole set
+        if (count > 0 && count > set->size())
+        {
+            StringSet::iterator it = set->begin();
+            while (it != set->end())
+            {
+                it->ToString(members.Get());
+                it++;
+            }
+            return 0;
+        }
+
+        int rand = 0;
         for (int i = 0; i < std::abs(count); i++)
         {
-            int rand = 0;
             if (count > 0)
             {
-                bool has_duplicate_value = false;
-                do
+                if (i == 0)
                 {
                     rand = random_between_int32(0, set->size() - 1);
-                    has_duplicate_value = uniq_set.insert(rand).second;
-                } while (has_duplicate_value);
+                }
+                else
+                {
+                    rand += i;
+                    if (rand >= set->size())
+                    {
+                        rand -= set->size();
+                    }
+                }
             }
             else
             {
@@ -464,6 +487,10 @@ namespace mmkv
                 DestroyObjectContent(cc);
                 removed++;
             }
+        }
+        if (set->empty())
+        {
+            GenericDel(GetMMKVTable(db, false),db, Object(key, false));
         }
         return removed;
     }

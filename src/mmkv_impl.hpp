@@ -100,27 +100,29 @@ namespace mmkv
             uint64_t GetTTL(DBID db, const Object& key, const Object& value);
 
             const Object* FindMMValue(MMKVTable* table, const Data& key) const;
-            Object& FindOrCreateStringValue(MMKVTable* table, const Data& key, const Data& value, bool reserve_ttl,
-                    bool& created);
+            Object& FindOrCreateStringValue(MMKVTable* table, const Data& key, const Data& value, bool& created);
             int GenericSet(MMKVTable* table, DBID db, const Data& key, const Data& value, int32_t ex, int64_t px,
                     int8_t nx_xx, bool replace = false);
             int GenericGet(MMKVTable* table, DBID db, const Data& key, std::string& value);
             int GenericDelValue(const Object& v);
             int GenericDelValue(uint32_t type, void* p);
-            int GenericDel(MMKVTable* table, const Object& key);
+            int GenericDel(MMKVTable* table, DBID db, const Object& key);
             int GenericInsertValue(MMKVTable* table, const Data& key, Object& v, bool replace);
             int GenericMoveKey(DBID src_db, const Data& src_key, DBID dest_db, const Data& dest_key, bool nx);
 
-            int GenericSInterDiffUnion(DBID db, int op, const DataArray& keys, const Data* dest, const StringArrayResult* results);
+            int GenericSInterDiffUnion(DBID db, int op, const DataArray& keys, const Data* dest,
+                    const StringArrayResult* results);
 
-            int GenericZSetInterUnion(DBID db, int op,const Data& destination, const DataArray& keys, const WeightArray& weights,
-                    const std::string& aggregate);
+            int GenericZSetInterUnion(DBID db, int op, const Data& destination, const DataArray& keys,
+                    const WeightArray& weights, const std::string& aggregate);
             int ReOpen(bool lock);
             int EnsureWritableValueSpace(size_t space_size = 0);
             int GetValueByPattern(MMKVTable* table, const std::string& pattern, const Object& subst, Object& value);
-            bool MatchValueByPattern(MMKVTable* table, const std::string& pattern, const std::string& value_pattern, Object& subst);
+            bool MatchValueByPattern(MMKVTable* table, const std::string& pattern, const std::string& value_pattern,
+                    Object& subst);
             int UpdateZSetScore(ZSet& zset, const Object& value, long double score, long double new_score);
-            int GeoSearchWithMinLimit(DBID db, const Data& key, const GeoSearchOptions& options, int coord_type, long double x, long double y, int min_limit, const StringArrayResult& results);
+            int GeoSearchWithMinLimit(DBID db, const Data& key, const GeoSearchOptions& options, int coord_type,
+                    long double x, long double y, int min_limit, const StringArrayResult& results);
         public:
             MMKVImpl();
             MemorySegmentManager& GetMemoryManager()
@@ -227,12 +229,14 @@ namespace mmkv
             int RandomKey(DBID db, std::string& key);
             int Rename(DBID db, const Data& key, const Data& new_key);
             int RenameNX(DBID db, const Data& key, const Data& new_key);
-            int64_t Scan(DBID db, int64_t cursor, const std::string& pattern, int32_t limit_count, const StringArrayResult& result);
+            int64_t Scan(DBID db, int64_t cursor, const std::string& pattern, int32_t limit_count,
+                    const StringArrayResult& result);
             int64_t TTL(DBID db, const Data& key);
             int Persist(DBID db, const Data& key);
             int Type(DBID db, const Data& key);
             int Sort(DBID db, const Data& key, const std::string& by, int limit_offset, int limit_count,
-                    const StringArray& get_patterns, bool desc, bool alpha_sort, const Data& destination_key, const StringArrayResult& results);
+                    const StringArray& get_patterns, bool desc, bool alpha_sort, const Data& destination_key,
+                    const StringArrayResult& results);
 
             /*
              * string's operations
@@ -250,7 +254,7 @@ namespace mmkv
             int Incr(DBID db, const Data& key, int64_t& new_val);
             int IncrBy(DBID db, const Data& key, int64_t increment, int64_t& new_val);
             int IncrByFloat(DBID db, const Data& key, long double increment, long double& new_val);
-            int MGet(DBID db, const DataArray& keys, const StringArrayResult& vals);
+            int MGet(DBID db, const DataArray& keys, const StringArrayResult& vals, BooleanArray* get_flags);
             int MSet(DBID db, const DataPairArray& key_vals);
             int MSetNX(DBID db, const DataPairArray& key_vals);
             int PSetNX(DBID db, const Data& key, int64_t milliseconds, const Data& value);
@@ -278,9 +282,10 @@ namespace mmkv
             int HIncrByFloat(DBID db, const Data& key, const Data& field, long double increment, long double& new_val);
             int HKeys(DBID db, const Data& key, const StringArrayResult& fields);
             int HLen(DBID db, const Data& key);
-            int HMGet(DBID db, const Data& key, const DataArray& fields, const StringArrayResult& vals);
+            int HMGet(DBID db, const Data& key, const DataArray& fields, const StringArrayResult& vals, BooleanArray* get_flag);
             int HMSet(DBID db, const Data& key, const DataPairArray& field_vals);
-            int64_t HScan(DBID db, const Data& key, int64_t cursor, const std::string& pattern, int32_t limit_count, const StringArrayResult& results);
+            int64_t HScan(DBID db, const Data& key, int64_t cursor, const std::string& pattern, int32_t limit_count,
+                    const StringArrayResult& results);
             int HSet(DBID db, const Data& key, const Data& field, const Data& val, bool nx = false);
             int HStrlen(DBID db, const Data& key, const Data& field);
             int HVals(DBID db, const Data& key, const StringArrayResult& vals);
@@ -323,7 +328,8 @@ namespace mmkv
             int SPop(DBID db, const Data& key, const StringArrayResult& members, int count = 1);
             int SRandMember(DBID db, const Data& key, const StringArrayResult& members, int count = 1);
             int SRem(DBID db, const Data& key, const DataArray& members);
-            int64_t SScan(DBID db, const Data& key, int64_t cursor, const std::string& pattern, int32_t limit_count, const StringArrayResult& results);
+            int64_t SScan(DBID db, const Data& key, int64_t cursor, const std::string& pattern, int32_t limit_count,
+                    const StringArrayResult& results);
             int SUnion(DBID db, const DataArray& keys, const StringArrayResult& unions);
             int SUnionStore(DBID db, const Data& destination, const DataArray& keys);
 
@@ -346,20 +352,22 @@ namespace mmkv
             int ZRemRangeByLex(DBID db, const Data& key, const std::string& min, const std::string& max);
             int ZRemRangeByRank(DBID db, const Data& key, int start, int stop);
             int ZRemRangeByScore(DBID db, const Data& key, const std::string& min, const std::string& max);
-            int ZRevRange(DBID db, const Data& key, int start, int stop, bool with_scores, const StringArrayResult& vals);
+            int ZRevRange(DBID db, const Data& key, int start, int stop, bool with_scores,
+                    const StringArrayResult& vals);
             int ZRevRangeByLex(DBID db, const Data& key, const std::string& min, const std::string& max,
                     int limit_offset, int limit_count, const StringArrayResult& vals);
             int ZRevRangeByScore(DBID db, const Data& key, const std::string& min, const std::string& max,
                     bool with_scores, int limit_offset, int limit_count, const StringArrayResult& vals);
             int ZRevRank(DBID db, const Data& key, const Data& member);
             int ZScore(DBID db, const Data& key, const Data& member, long double& score);
-            int64_t ZScan(DBID db, const Data& key, int64_t cursor, const std::string& pattern, int32_t limit_count, const StringArrayResult& results);
+            int64_t ZScan(DBID db, const Data& key, int64_t cursor, const std::string& pattern, int32_t limit_count,
+                    const StringArrayResult& results);
             int ZInterStore(DBID db, const Data& destination, const DataArray& keys, const WeightArray& weights,
                     const std::string& aggregate);
             int ZUnionStore(DBID db, const Data& destination, const DataArray& keys, const WeightArray& weights,
                     const std::string& aggregate);
 
-            int GeoAdd(DBID db, const Data& key,  const Data& coord_type, const GeoPointArray& points);
+            int GeoAdd(DBID db, const Data& key, const Data& coord_type, const GeoPointArray& points);
             int GeoSearch(DBID db, const Data& key, const GeoSearchOptions& options, const StringArrayResult& results);
 
             int64_t DBSize(DBID db);
@@ -367,7 +375,7 @@ namespace mmkv
             int FlushAll();
             int GetAllDBID(DBIDArray& ids);
 
-            int RemoveExpiredKeys(uint32_t max_removed , uint32_t max_time);
+            int RemoveExpiredKeys(uint32_t max_removed, uint32_t max_time);
 
             int Backup(const std::string& path);
             int Restore(const std::string& from_file);

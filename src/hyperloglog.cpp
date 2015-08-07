@@ -720,10 +720,10 @@ namespace mmkv
         long is_zero = 0, is_xzero = 0, is_val = 0, runlen = 0;
 
         int seqlen;
-        int oldlen ;
-        int deltalen ;
+        int oldlen;
+        int deltalen;
 
-        uint8_t seq[5] ;
+        uint8_t seq[5];
         uint8_t* n = NULL;
         int last; /* Last register covered by the sequence. */
         int len;
@@ -1324,7 +1324,7 @@ namespace mmkv
         hdr = (struct hllhdr *) obj.WritableData();
         memcpy(hdr->magic, "HYLL", 4);
         hdr->encoding = HLL_SPARSE;
-        HLL_FREE_SPACE(hdr)= 3;
+        HLL_FREE_SPACE(hdr) = 3;
     }
 
     /* Check if the object is a String with a valid HLL representation.
@@ -1391,7 +1391,7 @@ namespace mmkv
                 return err;
             }
         }
-        struct hllhdr *hdr = (struct hllhdr *)value_data.WritableData();
+        struct hllhdr *hdr = (struct hllhdr *) value_data.WritableData();
         /* Perform the low level ADD operation for every element. */
         for (size_t j = 0; j < elements.size(); j++)
         {
@@ -1418,7 +1418,7 @@ namespace mmkv
         {
             HLL_INVALIDATE_CACHE(hdr);
         }
-        return updated > 0 ? 1: 0;
+        return updated > 0 ? 1 : 0;
     }
     /* PFCOUNT var -> approximated cardinality of set. */
     int MMKVImpl::PFCount(DBID db, const DataArray& keys)
@@ -1540,7 +1540,6 @@ namespace mmkv
             return ERR_ENTRY_NOT_EXIST;
         }
 
-
         uint8_t max[HLL_REGISTERS];
         struct hllhdr *hdr;
         int j;
@@ -1584,6 +1583,10 @@ namespace mmkv
         {
             if ((err = isHLLObject(&value_data)) != 0)
                 return err;
+            if (hllMerge(max, &value_data) != 0)
+            {
+                return ERR_CORRUPTED_HLL_VALUE;
+            }
         }
         /* Only support dense objects as destination. */
         if (HLLSparseToDense(value_data) != 0)

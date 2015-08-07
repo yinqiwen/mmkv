@@ -44,7 +44,7 @@ namespace mmkv
         {
             index = list->size() + index;
         }
-        if (index < 0 || (size_t)index >= list->size())
+        if (index < 0 || (size_t) index >= list->size())
         {
             return ERR_OFFSET_OUTRANGE;
         }
@@ -64,6 +64,10 @@ namespace mmkv
         StringList* list = GetObject<StringList>(db, key, V_TYPE_LIST, false, err)();
         if (NULL == list)
         {
+            if (IS_NOT_EXISTS(err))
+            {
+                return 0;
+            }
             return err;
         }
         bool found = false;
@@ -85,7 +89,7 @@ namespace mmkv
             }
             it++;
         }
-        return found ? (int)list->size() : -1;
+        return found ? (int) list->size() : -1;
     }
     int MMKVImpl::LLen(DBID db, const Data& key)
     {
@@ -121,6 +125,10 @@ namespace mmkv
         str.ToString(val);
         DestroyObjectContent(str);
         list->pop_front();
+        if (list->empty())
+        {
+            GenericDel(GetMMKVTable(db, false), db, Object(key, false));
+        }
         return 0;
 
     }
@@ -138,6 +146,10 @@ namespace mmkv
         StringList* list = GetObject<StringList>(db, key, V_TYPE_LIST, nx ? false : true, err)(alloc);
         if (0 != err)
         {
+            if (nx && IS_NOT_EXISTS(err))
+            {
+                return 0;
+            }
             return err;
         }
         for (size_t i = 0; i < vals.size(); i++)
@@ -152,8 +164,12 @@ namespace mmkv
         int err = 0;
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         StringList* list = GetObject<StringList>(db, key, V_TYPE_LIST, false, err)();
-        if (NULL == list)
+        if (NULL == list || list->empty())
         {
+            if (IS_NOT_EXISTS(err))
+            {
+                return 0;
+            }
             return err;
         }
         int llen = list->size();
@@ -167,7 +183,7 @@ namespace mmkv
         {
             return ERR_OFFSET_OUTRANGE;
         }
-        for (int i = start; i <= end && (size_t)i < list->size(); i++)
+        for (int i = start; i <= end && (size_t) i < list->size(); i++)
         {
             list->at(i).ToString(vals.Get());
         }
@@ -189,6 +205,10 @@ namespace mmkv
         }
         Object val_obj(val, true);
         int actual_removed = 0;
+        if(count == 0)
+        {
+            count = list->size();
+        }
         if (count >= 0)
         {
             StringList::iterator it = list->begin();
@@ -227,6 +247,10 @@ namespace mmkv
                 }
             }
         }
+        if (list->empty())
+        {
+            GenericDel(GetMMKVTable(db, false), db, Object(key, false));
+        }
         return actual_removed;
     }
     int MMKVImpl::LSet(DBID db, const Data& key, int index, const Data& val)
@@ -247,7 +271,7 @@ namespace mmkv
         {
             index = list->size() + index;
         }
-        if (index < 0 || (size_t)index >= list->size())
+        if (index < 0 || (size_t) index >= list->size())
         {
             return ERR_OFFSET_OUTRANGE;
         }
@@ -288,7 +312,7 @@ namespace mmkv
         if (start > end || start >= llen)
         {
             /* Out of range start or start > end result in empty list */
-            GenericDel(GetMMKVTable(db, false), Object(key, true));
+            GenericDel(GetMMKVTable(db, false), db, Object(key, true));
         }
         else
         {
@@ -309,6 +333,10 @@ namespace mmkv
             DestroyObjectContent(data);
             list->pop_back();
             back_pop_count++;
+        }
+        if (list->empty())
+        {
+            GenericDel(GetMMKVTable(db, false), db, Object(key, false));
         }
         return 0;
     }
@@ -336,6 +364,10 @@ namespace mmkv
         data.ToString(val);
         DestroyObjectContent(data);
         list->pop_back();
+        if (list->empty())
+        {
+            GenericDel(GetMMKVTable(db, false), db, Object(key, false));
+        }
         return 0;
     }
     int MMKVImpl::RPopLPush(DBID db, const Data& source, const Data& destination, std::string& pop_value)
@@ -351,12 +383,10 @@ namespace mmkv
         EnsureWritableValueSpace();
         ObjectAllocator alloc = m_segment.ValueAllocator<Object>();
         StringList* src_list = GetObject<StringList>(db, source, V_TYPE_LIST, false, err)();
-
         if (0 != err)
         {
             return err;
         }
-
         StringList* dst_list = GetObject<StringList>(db, destination, V_TYPE_LIST, true, err)(alloc);
         if (0 != err)
         {
@@ -364,13 +394,17 @@ namespace mmkv
         }
         if (src_list->empty())
         {
-            return 0;
+            return ERR_ENTRY_NOT_EXIST;
         }
 
         Object& data = src_list->back();
         data.ToString(pop_value);
         dst_list->push_front(data);
         src_list->pop_back();
+        if (src_list->empty())
+        {
+            GenericDel(GetMMKVTable(db, false), db, Object(source, false));
+        }
         return 0;
     }
     int MMKVImpl::RPush(DBID db, const Data& key, const DataArray& vals, bool nx)
@@ -387,6 +421,10 @@ namespace mmkv
         StringList* list = GetObject<StringList>(db, key, V_TYPE_LIST, nx ? false : true, err)(alloc);
         if (0 != err)
         {
+            if (nx && IS_NOT_EXISTS(err))
+            {
+                return 0;
+            }
             return err;
         }
         size_t old_size = list->size();

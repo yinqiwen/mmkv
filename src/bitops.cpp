@@ -466,7 +466,7 @@ namespace mmkv
         }
         else
         {
-            GenericDel(kv, Object(dest_key, false));
+            GenericDel(kv, db, Object(dest_key, false));
         }
         return maxlen;
     }
@@ -574,12 +574,12 @@ namespace mmkv
         MMKVTable* kv = GetMMKVTable(db, false);
         if (NULL == kv)
         {
-            return ERR_ENTRY_NOT_EXIST;
+            return 0;
         }
         MMKVTable::iterator found = kv->find(Object(key, false));
         if (found == kv->end())
         {
-            return ERR_ENTRY_NOT_EXIST;
+            return 0;
         }
         Object& value_data = found->second;
         if (value_data.type != V_TYPE_STRING)
@@ -655,6 +655,7 @@ namespace mmkv
         }
         else
         {
+            memset(value_data.data, 0, 8);
             m_segment.AssignObjectValue(const_cast<Object&>(kk), key, true);
             value_data.type = V_TYPE_STRING;
             m_segment.ObjectMakeRoom(value_data, byte + 1, false);

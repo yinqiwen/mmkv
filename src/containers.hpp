@@ -34,6 +34,7 @@
 #include <sparsehash/sparse_hash_map>
 #include <sparsehash/dense_hash_map>
 #include <sparsehash/sparse_hash_set>
+#include <boost/interprocess/containers/vector.hpp>
 #include <string.h>
 #include <new>
 #include <string>
@@ -68,14 +69,12 @@ namespace mmkv
     typedef std::vector<StringSet*> StringSetArray;
 
     //typedef mmkv::btree::btree_map<MMKeyPtr, MMValuePtr, MMKeyPtrLess, MMKVAllocator> MMKVTable;
-    //typedef khmap_t<Object, Object, ObjectHash, ObjectEqual, StringMapAllocator> MMKVTable;
     typedef mmkv_google::dense_hash_map<Object, Object, ObjectHash, ObjectEqual, StringMapAllocator> MMKVTable;
     typedef Allocator<TTLValue> TTLValueAllocator;
     typedef mmkv::btree::btree_set<TTLValue, std::less<TTLValue>, TTLValueAllocator> TTLValueSet;
 
     typedef mmkv::btree::btree_set<DBID, std::less<DBID>, Allocator<DBID> > DBIDSet;
 
-    //typedef khmap_t<Object, Object, ObjectHash, ObjectEqual, StringMapAllocator> StringHashTable;
     typedef mmkv_google::sparse_hash_map<Object, Object, ObjectHash, ObjectEqual, StringMapAllocator> SparseStringHashTable;
     struct StringHashTable: public SparseStringHashTable
     {
@@ -89,7 +88,6 @@ namespace mmkv
 
     typedef std::pair<const Object, long double> StringScoreValue;
     typedef Allocator<StringScoreValue> StringScoreValueAllocator;
-    //typedef khmap_t<Object, long double, ObjectHash, ObjectEqual, StringScoreValueAllocator> StringDoubleTable;
     typedef mmkv_google::sparse_hash_map<Object, long double, ObjectHash, ObjectEqual, StringScoreValueAllocator> SparseStringDoubleTable;
     struct StringDoubleTable: public SparseStringDoubleTable
     {
@@ -104,6 +102,21 @@ namespace mmkv
     typedef std::pair<const TTLKey, int64_t> TTLValuePair;
     typedef Allocator<TTLValuePair> TTLValuePairAllocator;
     typedef mmkv_google::sparse_hash_map<TTLKey, uint64_t, TTLKeyHash, TTLKeyEqual, TTLValuePairAllocator> TTLValueTable;
+
+    struct ExpireInfoSet
+    {
+            TTLValueSet set;
+            TTLValueTable map;
+            ExpireInfoSet(const Allocator<char>& allocator) :
+                    set(std::less<TTLValue>(), allocator), map(0, TTLKeyHash(), TTLKeyEqual(), allocator)
+            {
+                TTLKey empty;
+                map.set_deleted_key(empty);
+            }
+    };
+
+    typedef boost::interprocess::offset_ptr<ExpireInfoSet> ExpireInfoSetOffsetPtr;
+    typedef boost::interprocess::vector<ExpireInfoSetOffsetPtr, Allocator<ExpireInfoSetOffsetPtr> > ExpireInfoSetArray;
 
     struct ZSet
     {

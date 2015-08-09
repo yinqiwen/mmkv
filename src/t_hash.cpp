@@ -39,7 +39,7 @@ namespace mmkv
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         StringHashTable* hash = GetObject<StringHashTable>(db, key, V_TYPE_HASH, false, err)();
-        if(IS_NOT_EXISTS(err))
+        if (IS_NOT_EXISTS(err))
         {
             return 0;
         }
@@ -271,7 +271,8 @@ namespace mmkv
         }
         return hash->size();
     }
-    int MMKVImpl::HMGet(DBID db, const Data& key, const DataArray& fields, const StringArrayResult& vals, BooleanArray* get_flags)
+    int MMKVImpl::HMGet(DBID db, const Data& key, const DataArray& fields, const StringArrayResult& vals,
+            BooleanArray* get_flags)
     {
         int err = 0;
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
@@ -280,20 +281,20 @@ namespace mmkv
         {
             return err;
         }
-        if(NULL != get_flags)
+        if (NULL != get_flags)
         {
             get_flags->resize(fields.size());
         }
         for (size_t i = 0; i < fields.size(); i++)
         {
             std::string& val = vals.Get();
-            if(NULL != hash)
+            if (NULL != hash)
             {
                 StringHashTable::iterator found = hash->find(Object(fields[i], true));
                 if (found != hash->end())
                 {
                     found->second.ToString(val);
-                    if(NULL != get_flags)
+                    if (NULL != get_flags)
                     {
                         (*get_flags)[i] = true;
                     }
@@ -346,32 +347,32 @@ namespace mmkv
             return err;
         }
         int match_count = 0;
-        int pos = cursor >= hash->bucket_count() ? hash->bucket_count() : cursor;
-        StringHashTable::local_iterator it = hash->begin(pos);
-        StringHashTable::local_iterator next = hash->begin(pos + 1);
-        while (it != hash->end())
+        size_t bucket_count = hash->bucket_count();
+        int pos = cursor >= bucket_count ? bucket_count : cursor;
+        while (pos < bucket_count)
         {
-            std::string key_str;
-            it->first.ToString(key_str);
-            if (pattern == ""
-                    || stringmatchlen(pattern.c_str(), pattern.size(), key_str.c_str(), key_str.size(), 0) == 1)
+            StringHashTable::local_iterator it = hash->begin(pos);
+            if (it != hash->end(pos))
             {
-                std::string& ss = results.Get();
-                ss = key_str;
-                match_count++;
-                if (limit_count > 0 && match_count >= limit_count)
+                std::string key_str;
+                it->first.ToString(key_str);
+                if (pattern == ""
+                        || stringmatchlen(pattern.c_str(), pattern.size(), key_str.c_str(), key_str.size(), 0) == 1)
                 {
-                    break;
+                    std::string& field = results.Get();
+                    field = key_str;
+                    std::string& value = results.Get();
+                    it->second.ToString(value);
+                    match_count++;
+                    if (limit_count > 0 && match_count >= limit_count)
+                    {
+                        break;
+                    }
                 }
             }
-            it++;
-            if (next == it)
-            {
-                pos++;
-                next = hash->begin(pos + 1);
-            }
+            pos++;
         }
-        return it == hash->end() ? 0 : pos;
+        return pos == bucket_count ? 0 : pos;
     }
     int MMKVImpl::HSet(DBID db, const Data& key, const Data& field, const Data& val, bool nx)
     {

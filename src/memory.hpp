@@ -80,6 +80,27 @@ namespace mmkv
 
             void* Allocate(size_t size, bool in_keyspace = false);
             void Deallocate(void* ptr);
+
+            template<typename T>
+            ConstructorProxy<T> NewObject(bool in_keyspace)
+            {
+                void* buf = Allocate(sizeof(T), in_keyspace);
+                T* value = (T*) buf;
+                ConstructorProxy<T> proxy;
+                proxy.ptr = value;
+                proxy.invoke_constructor = true;
+                return proxy;
+            }
+            template<typename T>
+            void DestroyObject(T* obj)
+            {
+                if(NULL != obj)
+                {
+                    obj->~T();
+                    Deallocate(obj);
+                }
+            }
+
             template<typename T>
             ConstructorProxy<T> FindOrConstructObject(const char* name, bool* created = NULL)
             {
@@ -99,11 +120,8 @@ namespace mmkv
                     return proxy;
                 }
                 AssignObjectValue(const_cast<Object&>(ret.first->first), name, true);
-                void* buf = Allocate(sizeof(T), true);
-                ret.first->second = buf;
-                T* value = (T*) buf;
-                proxy.ptr = value;
-                proxy.invoke_constructor = true;
+                proxy = NewObject<T>(true);
+                ret.first->second = proxy.ptr;
                 if (NULL != created)
                 {
                     *created = true;
@@ -130,8 +148,8 @@ namespace mmkv
                 StringObjectTable::iterator it = table->find(str);
                 if (it != table->end())
                 {
-                    T* p =  (T*) (it->second.get());
-                    if(NULL != p)
+                    T* p = (T*) (it->second.get());
+                    if (NULL != p)
                     {
                         p->~T();
                         Allocator<T> alloc = m_key_allocator;

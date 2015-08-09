@@ -33,7 +33,7 @@
 
 namespace mmkv
 {
-    static const uint32_t khll_sparse_max_bytes = 3000;
+    //static const uint32_t khll_sparse_max_bytes = 3000;
 
     /* The Redis HyperLogLog implementation is based on the following ideas:
      *
@@ -944,7 +944,7 @@ namespace mmkv
         oldlen = is_xzero ? 2 : 1;
         deltalen = seqlen - oldlen;
 
-        if (deltalen > 0 && o.len + deltalen > khll_sparse_max_bytes)
+        if (deltalen > 0 && o.len + deltalen > m_options.hll_sparse_max_bytes)
             goto promote;
         if (deltalen && next)
             memmove(next + deltalen, next, end - next);

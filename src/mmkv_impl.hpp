@@ -58,8 +58,7 @@ namespace mmkv
             bool m_readonly;
             typedef std::vector<MMKVTable*> MMKVTableArray;
             MMKVTableArray m_kvs;
-            TTLValueSet* m_ttlset;
-            TTLValueTable* m_ttlmap;
+            ExpireInfoSetArray* m_expires;
             DBIDSet* m_dbid_set;
             SpinMutexLock m_kv_table_lock;
             Logger m_logger;
@@ -95,6 +94,7 @@ namespace mmkv
             void AssignScoreValue(ScoreValue& sv, long double score, const Data& value);
             MMKVTable* GetMMKVTable(DBID db, bool create_if_notexist);
             int DeleteMMKVTable(DBID db);
+            ExpireInfoSet* GetDBExpireInfo(DBID db, bool create_ifnotexist);
             void ClearTTL(DBID db, const Object& key, Object& value);
             void SetTTL(DBID db, const Object& key, Object& value, uint64_t ttl);
             uint64_t GetTTL(DBID db, const Object& key, const Object& value);
@@ -375,7 +375,7 @@ namespace mmkv
             int FlushAll();
             int GetAllDBID(DBIDArray& ids);
 
-            int RemoveExpiredKeys(uint32_t max_removed, uint32_t max_time);
+            int RemoveExpiredKeys();
 
             int Backup(const std::string& path);
             int Restore(const std::string& from_file);

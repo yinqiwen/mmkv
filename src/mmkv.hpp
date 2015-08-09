@@ -42,7 +42,6 @@
 
 namespace mmkv
 {
-
     enum ErrCode
     {
         ERR_ENTRY_NOT_EXIST = -1000,
@@ -137,7 +136,7 @@ namespace mmkv
             {
             }
     };
-    typedef uint32_t DBID;
+
     typedef std::vector<Data> DataArray;
     typedef std::pair<Data, Data> DataPair;
     typedef std::vector<DataPair> DataPairArray;
@@ -611,9 +610,6 @@ namespace mmkv
                 return RegisterPODDestructor(expected_type, PODDestructorTemplate<T>::Destruct);
             }
 
-            /*
-             * 'T' MUST inherit from BasePOD
-             */
             template<typename T>
             PODProxy<T> GetPOD(DBID db, const Data& key, bool readonly, bool created_if_notexist,
                     uint32_t expected_type, LockedPOD<T>& value, int& err)
@@ -663,12 +659,10 @@ namespace mmkv
 
             virtual void Unlock(bool readonly) = 0;
 
-            virtual int RemoveExpiredKeys(uint32_t max_removed = 10000, uint32_t max_time = 100) = 0;
+            virtual int RemoveExpiredKeys() = 0;
 
             virtual int Backup(const std::string& dest_file) = 0;
             virtual int Restore(const std::string& from_file) = 0;
-            //virtual int Restore(const std::string& backup_dir, const std::string& to_dir) = 0;
-            //virtual bool CompareDataStore(const std::string& file) = 0;
             virtual int EnsureWritableSpace(size_t space_size) = 0;
 
             virtual Iterator* NewIterator() = 0;

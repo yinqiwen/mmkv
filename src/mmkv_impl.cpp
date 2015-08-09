@@ -42,12 +42,11 @@
 namespace mmkv
 {
     static const char* kTableConstName = "MMKVTable";
-    static const char* kTTLConstName = "MMKVTTLSet";
-    static const char* kTTLTableConstName = "MMKVTTLMap";
+    static const char* kExpiresConstName = "MMKVExpires";
     static const char* kDBIDSetName = "MMKVDBIDSet";
 
     MMKVImpl::MMKVImpl() :
-            m_readonly(false), m_ttlset(NULL), m_ttlmap(NULL), m_dbid_set(NULL)
+            m_readonly(false), m_expires(NULL), m_dbid_set(NULL)
     {
 
     }
@@ -160,19 +159,14 @@ namespace mmkv
     {
         if (!m_readonly)
         {
-            TTLValueAllocator allocator(m_segment.GetKeySpaceAllocator());
+            m_expires = NULL;
+            m_dbid_set = NULL;
+            m_kvs.clear();
+
+            Allocator<char> allocator = m_segment.GetKeySpaceAllocator();
             WriteLockGuard<MemorySegmentManager> keylock_guard(m_segment, lock);
-            m_ttlset = m_segment.FindOrConstructObject<TTLValueSet>(kTTLConstName)(std::less<TTLValue>(), allocator);
+            m_expires = m_segment.FindOrConstructObject<ExpireInfoSetArray>(kExpiresConstName)(allocator);
             m_dbid_set = m_segment.FindOrConstructObject<DBIDSet>(kDBIDSetName)(std::less<DBID>(), allocator);
-            bool created = false;
-            TTLValuePairAllocator alloc2(m_segment.GetKeySpaceAllocator());
-            m_ttlmap = m_segment.FindOrConstructObject<TTLValueTable>(kTTLTableConstName, &created)(0, TTLKeyHash(),
-                    TTLKeyEqual(), alloc2);
-            if (created)
-            {
-                TTLKey empty;
-                m_ttlmap->set_deleted_key(empty);
-            }
         }
         else
         {
@@ -203,6 +197,26 @@ namespace mmkv
         return 0;
     }
 
+    ExpireInfoSet* MMKVImpl::GetDBExpireInfo(DBID db, bool create_ifnotexist)
+    {
+        if (m_expires->size() < (db + 1))
+        {
+            if (!create_ifnotexist)
+            {
+                return NULL;
+            }
+            m_expires->resize(db + 1);
+        }
+        ExpireInfoSet* expire = m_expires->at(db).get();
+        if (NULL == expire && create_ifnotexist)
+        {
+            Allocator<char> allocator = m_segment.GetKeySpaceAllocator();
+            expire = m_segment.NewObject<ExpireInfoSet>(true)(allocator);
+            (*m_expires)[db] =  expire;
+        }
+        return expire;
+    }
+
     void MMKVImpl::ClearTTL(DBID db, const Object& key, Object& value)
     {
         if (value.hasttl)
@@ -210,16 +224,22 @@ namespace mmkv
             TTLValue entry;
             entry.key.db = db;
             entry.key.key = key;
-            TTLValueTable::iterator fit = m_ttlmap->find(entry.key);
-            if (fit == m_ttlmap->end())
+            ExpireInfoSet* expire = GetDBExpireInfo(db, false);
+            if (NULL == expire)
+            {
+                ERROR_LOG("No expire info found for db:%u to clear ttl.", db);
+                return;
+            }
+            TTLValueTable::iterator fit = expire->map.find(entry.key);
+            if (fit == expire->map.end())
             {
                 ABORT("No TTL value found for object");
                 return;
             }
             entry.expireat = fit->second;
             value.hasttl = 0;
-            m_ttlset->erase(entry);
-            m_ttlmap->erase(fit);
+            expire->set.erase(entry);
+            expire->map.erase(fit);
         }
     }
 
@@ -356,15 +376,16 @@ namespace mmkv
         entry.key.db = db;
         entry.key.key = key;
         value.hasttl = 1;
-        std::pair<TTLValueTable::iterator,bool> sit = m_ttlmap->insert(TTLValueTable::value_type(entry.key, ttl));
-        if(!sit.second)
+        ExpireInfoSet* expire = GetDBExpireInfo(db, true);
+        std::pair<TTLValueTable::iterator, bool> sit = expire->map.insert(TTLValueTable::value_type(entry.key, ttl));
+        if (!sit.second)
         {
             entry.expireat = sit.first->second;
-            m_ttlset->erase(entry);
+            expire->set.erase(entry);
             sit.first->second = ttl;
         }
         entry.expireat = ttl;
-        m_ttlset->insert(entry);
+        expire->set.insert(entry);
     }
     uint64_t MMKVImpl::GetTTL(DBID db, const Object& key, const Object& value)
     {
@@ -375,14 +396,14 @@ namespace mmkv
         TTLKey entry;
         entry.db = db;
         entry.key = key;
-        TTLValueTable::iterator fit = m_ttlmap->find(entry);
-        if (fit == m_ttlmap->end())
+        ExpireInfoSet* expire = GetDBExpireInfo(db, false);
+        TTLValueTable::iterator fit = expire->map.find(entry);
+        if (fit == expire->map.end())
         {
             ABORT("No TTL value found for object");
             return 0;
         }
-        uint64_t now = get_current_micros();
-        return fit->second > now ? fit->second : 0;
+        return fit->second;
     }
 
     int MMKVImpl::GenericDelValue(uint32_t type, void* ptr)
@@ -617,7 +638,7 @@ namespace mmkv
     int64_t MMKVImpl::TTL(DBID db, const Data& key)
     {
         int64_t pttl = PTTL(db, key);
-        return pttl > 0 ? pttl / 1000:pttl;
+        return pttl > 0 ? pttl / 1000 : pttl;
     }
     int64_t MMKVImpl::PTTL(DBID db, const Data& key)
     {
@@ -756,14 +777,10 @@ namespace mmkv
             }
         }
         MMKVTable::iterator it = kv->begin();
-        while (it != kv->end())
+        if (it != kv->end())
         {
-            //if (it.isfilled())
-            {
-                it->first.ToString(key);
-                return 0;
-            }
-            it++;
+            it->first.ToString(key);
+            return 0;
         }
         return 0;
     }
@@ -778,16 +795,13 @@ namespace mmkv
         MMKVTable::iterator it = kv->begin();
         while (it != kv->end())
         {
-            //if (it.isfilled())
+            std::string key_str;
+            it->first.ToString(key_str);
+            if (pattern == "*"
+                    || stringmatchlen(pattern.c_str(), pattern.size(), key_str.data(), key_str.size(), 0) == 1)
             {
-                std::string key_str;
-                it->first.ToString(key_str);
-                if (pattern == "*"
-                        || stringmatchlen(pattern.c_str(), pattern.size(), key_str.data(), key_str.size(), 0) == 1)
-                {
-                    std::string& ss = keys.Get();
-                    ss = key_str;
-                }
+                std::string& ss = keys.Get();
+                ss = key_str;
             }
             it++;
         }
@@ -809,20 +823,17 @@ namespace mmkv
         it.advance(pos);
         while (it != kv->end())
         {
-            //if (it.isfilled())
+            std::string key_str;
+            it->first.ToString(key_str);
+            if (pattern == ""
+                    || stringmatchlen(pattern.c_str(), pattern.size(), key_str.c_str(), key_str.size(), 0) == 1)
             {
-                std::string key_str;
-                it->first.ToString(key_str);
-                if (pattern == ""
-                        || stringmatchlen(pattern.c_str(), pattern.size(), key_str.c_str(), key_str.size(), 0) == 1)
+                std::string& ss = result.Get();
+                ss = key_str;
+                match_count++;
+                if (limit_count > 0 && match_count >= limit_count)
                 {
-                    std::string& ss = result.Get();
-                    ss = key_str;
-                    match_count++;
-                    if (limit_count > 0 && match_count >= limit_count)
-                    {
-                        break;
-                    }
+                    break;
                 }
             }
             pos++;
@@ -853,11 +864,9 @@ namespace mmkv
         {
             return 0;
         }
-
         MMKVTable::iterator it = kv->begin();
         while (it != kv->end())
         {
-            ClearTTL(db, it->first, it->second);
             DestroyObjectContent(it->first);
             GenericDelValue(it->second);
             it++;
@@ -865,6 +874,14 @@ namespace mmkv
         kv->clear();
         m_dbid_set->erase(db);
         DeleteMMKVTable(db);
+
+        //clear expire info for db
+        ExpireInfoSet* expire = GetDBExpireInfo(db, false);
+        if(NULL != expire)
+        {
+            m_segment.DestroyObject<ExpireInfoSet>(expire);
+            (*m_expires)[db] =  NULL;
+        }
         return 0;
     }
     int MMKVImpl::FlushAll()
@@ -874,52 +891,64 @@ namespace mmkv
             return ERR_PERMISSION_DENIED;
         }
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
-        m_kvs.clear();
         m_segment.ReCreate(true);
-        m_ttlset = NULL;
-        m_ttlmap = NULL;
-        m_dbid_set = NULL;
         ReOpen(false);
         return 0;
     }
 
-    int MMKVImpl::RemoveExpiredKeys(uint32_t max_removed, uint32_t max_time)
+    int MMKVImpl::RemoveExpiredKeys()
     {
         if (m_readonly)
         {
             return ERR_PERMISSION_DENIED;
         }
-        uint32_t removed = 0;
+        int removed = 0;
         uint64_t start = get_current_micros();
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
-        while (removed < max_removed && !m_ttlset->empty())
+        for (size_t i = 0; i < m_expires->size(); i++)
         {
-            TTLValueSet::iterator it = m_ttlset->begin();
-            uint64_t now = get_current_micros();
-            if (now - start >= max_time * 1000)
+            ExpireInfoSet* expire = m_expires->at(i).get();
+            if (NULL == expire)
             {
-                return removed;
+                continue;
             }
-            if (it->expireat > now)
-            {
-                return removed;
-            }
-            MMKVTable* kv = GetMMKVTable(it->key.db, false);
+            MMKVTable* kv = GetMMKVTable(i, false);
             if (NULL == kv)
             {
-                ERROR_LOG("Invalid entry for empty kv:%u", it->key.db);
+                if(!expire->set.empty())
+                {
+                    ERROR_LOG("db:%u is empty while expire table is not empty.", i);
+                }
+                continue;
             }
-            else
+            while (!expire->set.empty())
             {
-                m_ttlmap->erase(it->key);
+                TTLValueSet::iterator it = expire->set.begin();
+                if (it->expireat > start)
+                {
+                    break;
+                }
+                bool break_expire_check = false;
+                if(m_options.expire_cb != NULL)
+                {
+                    std::string keystr;
+                    it->key.key.ToString(keystr);
+                    if(-1 == (*m_options.expire_cb)(it->key.db, keystr))
+                    {
+                        break_expire_check = true;
+                    }
+                }
                 int err = GenericDel(kv, it->key.db, it->key.key);
                 if (err <= 0)
                 {
-                    ERROR_LOG("Invalid entry for delete error:%d", err);
+                    ERROR_LOG("Invalid expire entry for timeout delete error:%d", err);
                 }
-                m_ttlset->erase(it);
+                removed++;
+                if(break_expire_check)
+                {
+                    return 0 - removed;
+                }
             }
-            removed++;
         }
         return removed;
     }
@@ -933,9 +962,6 @@ namespace mmkv
     {
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         int err = m_segment.Restore(from_file);
-        m_kvs.clear();
-        m_ttlset = NULL;
-        m_ttlmap = NULL;
         ReOpen(false);
         return err;
     }
@@ -953,15 +979,8 @@ namespace mmkv
     {
         if (!m_readonly && (m_options.create_options.autoexpand || space_size > 0))
         {
-            if (0 == space_size)
-            {
-                space_size = m_options.create_options.ensure_space_size;
-            }
             if (m_segment.EnsureWritableValueSpace(space_size) > 0)
             {
-                m_kvs.clear();
-                m_ttlset = NULL;
-                m_ttlmap = NULL;
                 ReOpen(false);
                 return 1;
             }

@@ -37,18 +37,22 @@
 #define GEO_SEARCH_WITH_COORDINATES "WITHCOORDINATES"
 namespace mmkv
 {
+    typedef uint32_t DBID;
     struct CreateOptions
     {
             int64_t size;
             float keyspace_factor;
             bool autoexpand;
-            int64_t ensure_space_size;
             CreateOptions() :
-                    size(1024 * 1024 * 1024), keyspace_factor(0.25), autoexpand(false), ensure_space_size(
-                            512 * 1024 * 1024)
+                    size(1024 * 1024 * 1024), keyspace_factor(0.25), autoexpand(false)
             {
             }
     };
+
+    /*
+     * return -1 means break remove operations
+     */
+    typedef int ExpireCallback(DBID db, const std::string& key);
     struct OpenOptions
     {
             std::string dir;
@@ -58,13 +62,16 @@ namespace mmkv
             bool reserve_valuespace;
             bool use_lock;
             bool create_if_notexist;
+            uint32_t hll_sparse_max_bytes;
             LogLevel log_level;
             LoggerFunc* log_func;
+            ExpireCallback* expire_cb;
             CreateOptions create_options;
+
             OpenOptions() :
                     dir("./mmkv"), readonly(false), verify(true), reserve_keyspace(false), reserve_valuespace(false), use_lock(
-                            false), create_if_notexist(false), log_level(INFO_LOG_LEVEL), log_func(
-                    NULL)
+                            false), create_if_notexist(false), hll_sparse_max_bytes(3000), log_level(INFO_LOG_LEVEL), log_func(
+                    NULL), expire_cb(NULL)
             {
             }
     };

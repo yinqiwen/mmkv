@@ -266,14 +266,14 @@ namespace mmkv
             return -1;
         }
         Meta* meta = (Meta*) m_data_buf;
+        if(space_size == 0)
+        {
+            space_size = meta->file_size >> 1; //half of current mmap size
+        }
         size_t top_size = mspace_top_size((char*) (meta) + meta->valuespace_offset);
         if (top_size < space_size)
         {
-            size_t new_size = meta->file_size * 2;
-            while (new_size < space_size)
-            {
-                new_size += meta->file_size * 2;
-            }
+            size_t new_size = meta->file_size  + space_size;
             return Expand(new_size);
         }
         return 0;

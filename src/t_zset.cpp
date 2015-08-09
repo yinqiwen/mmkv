@@ -1200,7 +1200,6 @@ namespace mmkv
                 char score_str[256];
                 snprintf(score_str, sizeof(score_str), "%.17Lg", it->score);
                 std::string& score_string = vals.Get();
-                ;
                 score_string = score_str;
                 match_count++;
                 if (limit_count > 0 && match_count >= limit_count)
@@ -1344,10 +1343,10 @@ namespace mmkv
                     StringSet::iterator it = ss->begin();
                     while (it != ss->end())
                     {
-                        long double current_score = weights.empty() ? 1.0 : weights[i] * 1.0;
+                        long double current_score = weights.empty() ? 1 : weights[i] * 1;
                         std::pair<StdObjectScoreTable::iterator, bool> ret = cache_result.insert(
                                 StdObjectScoreTable::value_type(*it, current_score));
-                        if (ret.second)
+                        if (!ret.second)
                         {
                             aggregate_score(aggregate_type, current_score, ret.first->second);
                         }
@@ -1368,7 +1367,7 @@ namespace mmkv
                         }
                         else
                         {
-                            long double current_score = weights.empty() ? 1.0 : weights[i] * 1.0;
+                            long double current_score = weights.empty() ? 1 : weights[i] * 1;
                             aggregate_score(aggregate_type, current_score, sit->second);
                             sit++;
                         }
@@ -1386,7 +1385,7 @@ namespace mmkv
                         long double current_score = weights.empty() ? it->score : weights[i] * it->score;
                         std::pair<StdObjectScoreTable::iterator, bool> ret = cache_result.insert(
                                 StdObjectScoreTable::value_type(it->value, current_score));
-                        if (ret.second)
+                        if (!ret.second)
                         {
                             aggregate_score(aggregate_type, current_score, ret.first->second);
                         }
@@ -1440,7 +1439,6 @@ namespace mmkv
         StdObjectScoreTable::iterator cit = cache_result.begin();
         while (cit != cache_result.end())
         {
-
             std::pair<StringDoubleTable::iterator, bool> ret = destset->scores.insert(
                     StringDoubleTable::value_type(cit->first, cit->second));
             if (!ret.second)
@@ -1454,7 +1452,7 @@ namespace mmkv
             destset->set.insert(sv);
             cit++;
         }
-        return 0;
+        return cache_result.size();
     }
 
     int MMKVImpl::ZInterStore(DBID db, const Data& destination, const DataArray& keys, const WeightArray& weights,

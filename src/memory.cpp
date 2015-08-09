@@ -63,12 +63,13 @@ namespace mmkv
     static const int kMaxReaderProcCount = 65536;
     static int g_reader_count_index = -1;
 
-    static inline int64_t allign_size(int64_t size, uint32_t allignment)
+    static inline int64_t allign_page(int64_t size)
     {
-        uint32_t left = size % allignment;
+        int page = sysconf(_SC_PAGESIZE);
+        uint32_t left = size % page;
         if (left > 0)
         {
-            return size + (allignment - left);
+            return size + (page - left);
         }
         return size;
     }
@@ -121,18 +122,18 @@ namespace mmkv
         void* value_space = NULL;
         if (meta->IsKeyValueSplit())
         {
-            value_space = (char*) key_space + meta->init_key_space_size;
+            value_space = (char*) key_space + meta->valuespace_offset;
         }
 
         if (!m_open_options.readonly)
         {
             if (m_open_options.reserve_keyspace)
             {
-                mlock(key_space, meta->init_key_space_size);
+                mlock(key_space, meta->keyspace_size);
             }
             if (m_open_options.reserve_valuespace && NULL != value_space)
             {
-                mlock(value_space, meta->size - meta->init_key_space_size);
+                mlock(value_space, meta->size - meta->keyspace_size);
             }
         }
         return 0;
@@ -213,37 +214,37 @@ namespace mmkv
 
         Meta* meta = (Meta*) m_data_buf;
         Header* header = (Header*) ((char*) m_data_buf + kMetaLength);
+        bool split_keyvalue_space = true;
         if (overwrite) //create file
         {
             meta->file_size = m_open_options.create_options.size;
             meta->size = m_open_options.create_options.size - kHeaderLength - kMetaLength;
-            meta->init_key_space_size = (int64_t) (meta->size * m_open_options.create_options.keyspace_factor);
+            meta->keyspace_size = (int64_t) (meta->size * m_open_options.create_options.keyspace_factor);
             //allign key space size to 4096(page size)
             uint32_t page_size = 4096;
-            meta->init_key_space_size = allign_size(meta->init_key_space_size, page_size);
+            meta->keyspace_size = allign_page(meta->keyspace_size);
+            split_keyvalue_space = m_open_options.create_options.keyspace_factor < 1;
         }
 
         void* key_space = (char*) meta + kHeaderLength + kMetaLength;
-        void* key_mspace = create_mspace_with_base(key_space, meta->init_key_space_size, 0, overwrite);
+        void* key_mspace = create_mspace_with_base(key_space, meta->keyspace_size, 0, overwrite);
 
         void* value_space = NULL;
         void* value_mspace = NULL;
-        if (meta->IsKeyValueSplit())
+        if (split_keyvalue_space || meta->IsKeyValueSplit())
         {
-            value_space = (char*) key_space + meta->init_key_space_size;
-            value_mspace = create_mspace_with_base(value_space, meta->size - meta->init_key_space_size, 0, overwrite);
+            value_space = (char*) key_space + meta->keyspace_size;
+            value_mspace = create_mspace_with_base(value_space, meta->size - meta->keyspace_size, 0, overwrite);
+        }
+        else
+        {
+            value_space = key_space;
+            value_mspace = key_mspace;
         }
         if (overwrite)
         {
             meta->keyspace_offset = (char*) key_mspace - (char*) m_data_buf;
-            if (NULL != value_mspace)
-            {
-                meta->valuespace_offset = (char*) value_mspace - (char*) m_data_buf;
-            }
-            else
-            {
-                meta->valuespace_offset = meta->keyspace_offset;
-            }
+            meta->valuespace_offset = (char*) value_mspace - (char*) m_data_buf;
         }
 
         m_key_allocator = Allocator<char>(key_space_info);
@@ -266,14 +267,14 @@ namespace mmkv
             return -1;
         }
         Meta* meta = (Meta*) m_data_buf;
-        if(space_size == 0)
+        if (space_size == 0)
         {
             space_size = meta->file_size >> 1; //half of current mmap size
         }
         size_t top_size = mspace_top_size((char*) (meta) + meta->valuespace_offset);
         if (top_size < space_size)
         {
-            size_t new_size = meta->file_size  + space_size;
+            size_t new_size = meta->file_size + space_size;
             return Expand(new_size);
         }
         return 0;
@@ -291,6 +292,7 @@ namespace mmkv
         {
             return 0;
         }
+        new_size = allign_page(new_size);
         size_t inc = new_size - meta->file_size;
 
         munmap(m_data_buf, meta->file_size);
@@ -580,7 +582,7 @@ namespace mmkv
         void* key_space_start = (char*) meta + kMetaLength + kHeaderLength;
         void* key_mspace_top = mspace_top_address(key_mspace);
         void* value_mspace = (char*) meta + meta->valuespace_offset;
-        void* value_space_start = (char*) meta + kMetaLength + kHeaderLength + meta->init_key_space_size;
+        void* value_space_start = (char*) meta + kMetaLength + kHeaderLength + meta->keyspace_size;
         void* value_mspace_top = mspace_top_address(value_mspace);
         uint32_t now = time(NULL);
 
@@ -668,12 +670,13 @@ namespace mmkv
         munmap(m_data_buf, meta->file_size);
         char data_path[m_open_options.dir.size() + 100];
         sprintf(data_path, "%s/data", m_open_options.dir.c_str());
-        int err =  Restore(from_file, data_path);
+        int err = Restore(from_file, data_path);
         MMapBuf data_buf(m_logger);
-        if(m_open_options.readonly)
+        if (m_open_options.readonly)
         {
             err = data_buf.OpenRead(data_path);
-        }else
+        }
+        else
         {
             err = data_buf.OpenWrite(data_path, 0, false);
         }
@@ -810,7 +813,7 @@ namespace mmkv
         }
         //
         buf_cursor += chunk_decomp_size;
-        fseek(dest_file, kMetaLength + kHeaderLength + meta.init_key_space_size, SEEK_SET);
+        fseek(dest_file, kMetaLength + kHeaderLength + meta.keyspace_size, SEEK_SET);
         compressed_value_space = backup.buf + buf_cursor;
         if (meta.IsKeyValueSplit())
         {
@@ -861,14 +864,14 @@ namespace mmkv
         char* key_space_start = (char*) meta + kMetaLength + kHeaderLength;
         char* key_mspace_stop = (char*) mspace_top_address(key_mspace);
         char* value_mspace = (char*) meta + meta->valuespace_offset;
-        char* value_space_start = (char*) meta + kMetaLength + kHeaderLength + meta->init_key_space_size;
+        char* value_space_start = (char*) meta + kMetaLength + kHeaderLength + meta->keyspace_size;
         char* value_mspace_stop = (char*) mspace_top_address(value_mspace);
 
         char* other_key_mspace = cmpbuf.buf + meta->keyspace_offset;
         char* other_key_space_start = cmpbuf.buf + kMetaLength + kHeaderLength;
         char* other_key_mspace_stop = (char*) mspace_top_address(other_key_mspace);
         char* other_value_mspace = cmpbuf.buf + meta->valuespace_offset;
-        char* other_value_space_start = cmpbuf.buf + kMetaLength + kHeaderLength + meta->init_key_space_size;
+        char* other_value_space_start = cmpbuf.buf + kMetaLength + kHeaderLength + meta->keyspace_size;
         char* other_value_mspace_stop = (char*) mspace_top_address(other_value_mspace);
 
         if (key_mspace_stop - key_space_start != other_key_mspace_stop - other_key_space_start)

@@ -50,16 +50,16 @@ namespace mmkv
     {
             size_t file_size;
             size_t size;
-            size_t init_key_space_size;
+            size_t keyspace_size;
             size_t keyspace_offset;
             size_t valuespace_offset;
             Meta() :
-                    file_size(0), size(0), init_key_space_size(0), keyspace_offset(0), valuespace_offset(0)
+                    file_size(0), size(0), keyspace_size(0),keyspace_offset(0), valuespace_offset(1)
             {
             }
             inline bool IsKeyValueSplit()
             {
-                return init_key_space_size != size;
+                return keyspace_offset != valuespace_offset;
             }
     };
     struct MemorySpaceInfo
@@ -257,11 +257,11 @@ namespace mmkv
                 {
                     if (m_space.is_keyspace)
                     {
-                        return meta->init_key_space_size / sizeof(T);
+                        return meta->keyspace_size / sizeof(T);
                     }
                     else
                     {
-                        return (meta->size - meta->init_key_space_size) / sizeof(T);
+                        return (meta->size - meta->keyspace_size) / sizeof(T);
                     }
                 }
             }

@@ -163,7 +163,7 @@ namespace mmkv
     }
 #endif
 
-    static inline unsigned char xchg_8(void *ptr, unsigned char x)
+    static inline unsigned char xchg_8(volatile void *ptr, unsigned char x)
     {
         asm volatile("xchgb %0,%1"
                 :"=r" (x)
@@ -172,7 +172,7 @@ namespace mmkv
         return x;
     }
 
-    static inline unsigned short xchg_16(void *ptr, unsigned short x)
+    static inline unsigned short xchg_16(volatile void *ptr, unsigned short x)
     {
         asm volatile("xchgw %0,%1"
                 :"=r" ((unsigned short) x)
@@ -181,7 +181,7 @@ namespace mmkv
         return x;
     }
 
-    static inline unsigned xchg_32(void *ptr, unsigned x)
+    static inline unsigned xchg_32(volatile void *ptr, unsigned x)
     {
         asm volatile("xchgl %0,%1"
                 :"=r" ((unsigned) x)
@@ -191,7 +191,7 @@ namespace mmkv
     }
 
 #ifdef __x86_64__
-    static inline unsigned long long xchg_64(void *ptr, unsigned long long x)
+    static inline unsigned long long xchg_64(volatile void *ptr, unsigned long long x)
     {
         asm volatile("xchgq %0,%1"
                 :"=r" ((unsigned long long) x)
@@ -200,7 +200,7 @@ namespace mmkv
         return x;
     }
 
-    static inline void *xchg_ptr(void *ptr, void *x)
+    static inline void *xchg_ptr(volatile void *ptr, void *x)
     {
         __asm__ __volatile__("xchgq %0,%1"
                 :"=r" ((uintptr_t) x)
@@ -209,7 +209,7 @@ namespace mmkv
         return x;
     }
 #else
-static inline void *xchg_ptr(void *ptr, void *x)
+static inline void *xchg_ptr(volatile void *ptr, void *x)
 {
     __asm__ __volatile__("xchgl %k0,%1"
             :"=r" ((uintptr_t) x)

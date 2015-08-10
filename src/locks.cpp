@@ -134,14 +134,14 @@ namespace mmkv
         /* Spin for a bit to try to get the lock */
         for (i = 0; i < 100; i++)
         {
-            if (!(xchg_8(&m_lock.lock.locked, 1) & 1))
+            if (!(xchg_8((void*)&m_lock.lock.locked, 1) & 1))
                 return true;
 
             cpu_relax();
         }
 
         /* Failed, so we need to sleep */
-        while (xchg_8(&m_lock.lock.locked, 1) & 1)
+        while (xchg_8((void*)&m_lock.lock.locked, 1) & 1)
         {
             sys_futex(&m_lock.lock, FUTEX_WAIT, m_lock.lock.waiters | 1, NULL, NULL, 0);
         }
@@ -211,7 +211,7 @@ namespace mmkv
         }
 
         /* Grab write lock */
-        while (xchg_8(&m_lock.lock.locked, 1) & 1)
+        while (xchg_8((void*)&m_lock.lock.locked, 1) & 1)
         {
             sys_futex(&m_lock.lock, FUTEX_WAIT, m_lock.lock.waiters | 1, NULL, NULL, 0);
         }

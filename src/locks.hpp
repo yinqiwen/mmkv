@@ -159,15 +159,15 @@ namespace mmkv
     {
             union
             {
-                    uint64_t l;
-                    uint32_t waiters;
-                    uint8_t locked;
+                    volatile uint64_t l;
+                    volatile uint32_t waiters;
+                    volatile uint8_t locked;
             } lock;
 
             union
             {
-                    uint32_t seq;
-                    uint8_t contend;
+                    volatile uint32_t seq;
+                    volatile uint8_t contend;
             } read_wait;
     };
     /*

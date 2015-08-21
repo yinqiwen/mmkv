@@ -347,32 +347,28 @@ namespace mmkv
             return err;
         }
         int match_count = 0;
-        size_t bucket_count = hash->bucket_count();
-        int pos = cursor >= bucket_count ? bucket_count : cursor;
-        while (pos < bucket_count)
+        int pos = cursor >= hash->size() ? hash->size() : cursor;
+        MMKVTable::iterator it = hash->begin();
+        it.increment_by(pos);
+        while (it != hash->end())
         {
-            StringHashTable::local_iterator it = hash->begin(pos);
-            if (it != hash->end(pos))
+            std::string key_str;
+            it->first.ToString(key_str);
+            if (pattern == ""
+                    || stringmatchlen(pattern.c_str(), pattern.size(), key_str.c_str(), key_str.size(), 0) == 1)
             {
-                std::string key_str;
-                it->first.ToString(key_str);
-                if (pattern == ""
-                        || stringmatchlen(pattern.c_str(), pattern.size(), key_str.c_str(), key_str.size(), 0) == 1)
+                std::string& ss = results.Get();
+                ss = key_str;
+                match_count++;
+                if (limit_count > 0 && match_count >= limit_count)
                 {
-                    std::string& field = results.Get();
-                    field = key_str;
-                    std::string& value = results.Get();
-                    it->second.ToString(value);
-                    match_count++;
-                    if (limit_count > 0 && match_count >= limit_count)
-                    {
-                        break;
-                    }
+                    break;
                 }
             }
             pos++;
+            it++;
         }
-        return pos == bucket_count ? 0 : pos;
+        return pos == hash->size() ? 0 : pos;
     }
     int MMKVImpl::HSet(DBID db, const Data& key, const Data& field, const Data& val, bool nx)
     {

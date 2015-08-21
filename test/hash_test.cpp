@@ -67,18 +67,18 @@ TEST(HGetAll, Hash)
     mmkv::StringArray vs;
     CHECK_EQ(int, g_test_kv->HGetAll(0, "myhash", vs), 0, "");
     CHECK_EQ(int, vs.size(), 4, "");
-    CHECK_EQ(std::string, vs[0], "field2", "");
-    CHECK_EQ(std::string, vs[1], "world", "");
-    CHECK_EQ(std::string, vs[2], "field1", "");
-    CHECK_EQ(std::string, vs[3], "hello", "");
+    CHECK_EQ(std::string, vs[0], "field1", "");
+    CHECK_EQ(std::string, vs[1], "hello", "");
+    CHECK_EQ(std::string, vs[2], "field2", "");
+    CHECK_EQ(std::string, vs[3], "world", "");
     CHECK_EQ(int, g_test_kv->HKeys(0, "myhash", vs), 0, "");
     CHECK_EQ(int, vs.size(), 2, "");
-    CHECK_EQ(std::string, vs[0], "field2", "");
-    CHECK_EQ(std::string, vs[1], "field1", "");
+    CHECK_EQ(std::string, vs[0], "field1", "");
+    CHECK_EQ(std::string, vs[1], "field2", "");
     CHECK_EQ(int, g_test_kv->HVals(0, "myhash", vs), 0, "");
     CHECK_EQ(int, vs.size(), 2, "");
-    CHECK_EQ(std::string, vs[0], "world", "");
-    CHECK_EQ(std::string, vs[1], "hello", "");
+    CHECK_EQ(std::string, vs[0], "hello", "");
+    CHECK_EQ(std::string, vs[1], "world", "");
 }
 
 TEST(HIncr, Hash)

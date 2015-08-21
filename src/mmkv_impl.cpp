@@ -120,16 +120,16 @@ namespace mmkv
         {
             ObjectMapAllocator allocator(m_segment.GetKeySpaceAllocator());
             bool created = false;
-            //kv = m_segment.FindOrConstructObject<MMKVTable>(name, &created)(allocator);
-            kv = m_segment.FindOrConstructObject<MMKVTable>(name, &created)(0, ObjectHash(), ObjectEqual(), allocator);
+            kv = m_segment.FindOrConstructObject<MMKVTable>(name, &created)(std::less<Object>(), allocator);
+//            kv = m_segment.FindOrConstructObject<MMKVTable>(name, &created)(0, ObjectHash(), ObjectEqual(), allocator);
             if (created)
             {
                 m_dbid_set->insert(db);
-                Object empty;
-                kv->set_empty_key(empty);
-                Object deleted;
-                deleted.SetData(DENSE_TABLE_DELETED_KEY, false);
-                kv->set_deleted_key(deleted);
+//                Object empty;
+//                kv->set_empty_key(empty);
+//                Object deleted;
+//                deleted.SetData(DENSE_TABLE_DELETED_KEY, false);
+//                kv->set_deleted_key(deleted);
             }
         }
         else
@@ -522,8 +522,9 @@ namespace mmkv
             {
                 return err;
             }
-            DestroyObjectContent(found->first);
+            Object key_obj =  found->first;
             table->erase(found);
+            DestroyObjectContent(key_obj);
             return 1;
         }
         return 0;
@@ -653,7 +654,11 @@ namespace mmkv
         {
             return -2;
         }
-        return value_data->hasttl ? (GetTTL(db, Object(key, false), *value_data) - get_current_micros()) / 1000 : -1;
+        if(value_data->hasttl)
+        {
+            return (GetTTL(db, Object(key, false), *value_data) - get_current_micros()) / 1000;
+        }
+        return -1;
     }
     int MMKVImpl::Expire(DBID db, const Data& key, uint32_t secs)
     {
@@ -764,7 +769,8 @@ namespace mmkv
         while (true)
         {
             MMKVTable::iterator it = kv->begin();
-            it.advance(random_between_int32(0, INT_MAX) % kv->bucket_count());
+            it.increment_by(random_between_int32(0, INT_MAX) % kv->size());
+            //it.advance(random_between_int32(0, INT_MAX) % kv->bucket_count());
             if (it != kv->end())
             {
                 it->first.ToString(key);
@@ -818,9 +824,9 @@ namespace mmkv
             return 0;
         }
         int match_count = 0;
-        int pos = cursor >= kv->bucket_count() ? kv->bucket_count() : cursor;
+        int pos = cursor >= kv->size() ? kv->size() : cursor;
         MMKVTable::iterator it = kv->begin();
-        it.advance(pos);
+        it.increment_by(pos);
         while (it != kv->end())
         {
             std::string key_str;

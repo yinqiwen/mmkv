@@ -55,6 +55,7 @@
 #define OBJ_ENCODING_PTR 1
 #define OBJ_ENCODING_OFFSET_PTR 2
 #define OBJ_ENCODING_INT 3
+#define OBJ_ENCODING_PADDING
 
 namespace mmkv
 {
@@ -174,7 +175,7 @@ namespace mmkv
             }
             inline void SetData(const Data& v, bool try_int_encoding)
             {
-                if(v.Value() == NULL)
+                if (v.Value() == NULL)
                 {
                     try_int_encoding = true;
                 }
@@ -414,6 +415,18 @@ namespace mmkv
             TTLKey() :
                     db(0)
             {
+            }
+            bool operator<(const TTLKey& other) const
+            {
+                if (db < other.db)
+                {
+                    return true;
+                }
+                if (db > other.db)
+                {
+                    return false;
+                }
+                return key < other.key;
             }
     };
 

@@ -40,8 +40,9 @@ namespace mmkv
 
     struct Header
     {
-            VoidPtr key_space;
-            VoidPtr value_space;
+            VoidPtr mspace;
+            //VoidPtr key_space;
+            //VoidPtr value_space;
             char named_objects[sizeof(StringObjectTable)];
     };
 
@@ -53,8 +54,8 @@ namespace mmkv
             bool m_readonly;
             bool m_lock_enable;
             Logger m_logger;
-            Allocator<char> m_key_allocator;
-            Allocator<char> m_value_allocator;
+            Allocator<char> m_space_allocator;
+            //Allocator<char> m_value_allocator;
             StringObjectTable* m_named_objs;
             MMLock* m_global_lock;
             void* m_data_buf;
@@ -75,16 +76,16 @@ namespace mmkv
             int Open(const OpenOptions& open_options);
             int EnsureWritableValueSpace(size_t space_size);
 
-            bool AssignObjectValue(Object& obj, const Data& value, bool in_keyspace = false);
-            bool ObjectMakeRoom(Object& obj, size_t size, bool in_keyspace = false);
+            bool AssignObjectValue(Object& obj, const Data& value, bool try_int_encoding);
+            bool ObjectMakeRoom(Object& obj, size_t size);
 
-            void* Allocate(size_t size, bool in_keyspace = false);
+            void* Allocate(size_t size);
             void Deallocate(void* ptr);
 
             template<typename T>
-            ConstructorProxy<T> NewObject(bool in_keyspace)
+            ConstructorProxy<T> NewObject()
             {
-                void* buf = Allocate(sizeof(T), in_keyspace);
+                void* buf = Allocate(sizeof(T));
                 T* value = (T*) buf;
                 ConstructorProxy<T> proxy;
                 proxy.ptr = value;
@@ -119,8 +120,8 @@ namespace mmkv
                     }
                     return proxy;
                 }
-                AssignObjectValue(const_cast<Object&>(ret.first->first), name, true);
-                proxy = NewObject<T>(true);
+                AssignObjectValue(const_cast<Object&>(ret.first->first), name, false);
+                proxy = NewObject<T>();
                 ret.first->second = proxy.ptr;
                 if (NULL != created)
                 {
@@ -152,7 +153,7 @@ namespace mmkv
                     if (NULL != p)
                     {
                         p->~T();
-                        Allocator<T> alloc = m_key_allocator;
+                        Allocator<T> alloc = m_space_allocator;
                         alloc.deallocate_ptr(p);
                     }
                     table->erase(it);
@@ -161,25 +162,16 @@ namespace mmkv
                 return 0;
             }
 
-            Allocator<char> GetKeySpaceAllocator();
-            Allocator<char> GetValueSpaceAllocator();
+            Allocator<char> GetMSpaceAllocator();
 
             template<typename T>
-            Allocator<T> KeyAllocator()
+            Allocator<T> MSpaceAllocator()
             {
-                return Allocator<T>(GetKeySpaceAllocator());
-            }
-            template<typename T>
-            Allocator<T> ValueAllocator()
-            {
-                return Allocator<T>(GetValueSpaceAllocator());
+                return Allocator<T>(GetMSpaceAllocator());
             }
 
-            size_t KeySpaceUsed();
-            size_t keySpaceCapacity();
-
-            size_t ValueSpaceUsed();
-            size_t ValueSpaceCapacity();
+            size_t MSpaceUsed();
+            size_t MSpaceCapacity();
 
             bool Lock(LockMode mode);
             bool Unlock(LockMode mode);

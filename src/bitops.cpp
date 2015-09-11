@@ -303,7 +303,6 @@ namespace mmkv
         {
             return ERR_DB_NOT_EXIST;
         }
-
         /* Lookup keys, and store pointers to the string objects into an array. */
         numkeys = keys.size();
         unsigned char *src[numkeys]; /* Array of source strings pointers. */
@@ -349,7 +348,7 @@ namespace mmkv
         if (maxlen)
         {
             //res = AllocateStringValueSpace(maxlen, false);
-            m_segment.ObjectMakeRoom(res, maxlen, false);
+            m_segment.ObjectMakeRoom(res, maxlen);
             unsigned char output, byte;
             unsigned long i;
 
@@ -586,10 +585,10 @@ namespace mmkv
         {
             return ERR_INVALID_TYPE;
         }
-        if (IsExpired(db, key, value_data))
-        {
-            return 0;
-        }
+//        if (IsExpired(db, key, value_data))
+//        {
+//            return 0;
+//        }
 
         byte = bitoffset >> 3;
         bit = 7 - (bitoffset & 0x7);
@@ -650,15 +649,15 @@ namespace mmkv
             ClearTTL(db, kk, value_data);
             if (value_data.IsInteger() || value_data.len < (size_t) (byte + 1))
             {
-                m_segment.ObjectMakeRoom(value_data, byte + 1, false);
+                m_segment.ObjectMakeRoom(value_data, byte + 1);
             }
         }
         else
         {
             memset(value_data.data, 0, 8);
-            m_segment.AssignObjectValue(const_cast<Object&>(kk), key, true);
+            m_segment.AssignObjectValue(const_cast<Object&>(kk), key, false);
             value_data.type = V_TYPE_STRING;
-            m_segment.ObjectMakeRoom(value_data, byte + 1, false);
+            m_segment.ObjectMakeRoom(value_data, byte + 1);
             memset(const_cast<char*>(value_data.RawValue()), 0, value_data.len);
         }
         /* Get current values */

@@ -642,7 +642,7 @@ namespace mmkv
          * Note that the cached cardinality is set to 0 as a side effect
          * that is exactly the cardinality of an empty HLL. */
         Object dense_value;
-        m_segment.ObjectMakeRoom(dense_value, HLL_DENSE_SIZE + 1, false);
+        m_segment.ObjectMakeRoom(dense_value, HLL_DENSE_SIZE + 1);
         //the last byte would be accessed
         dense_value.len = HLL_DENSE_SIZE;
         //MMValue* dense_value = AllocateStringValueSpace(HLL_DENSE_SIZE, false);
@@ -748,7 +748,7 @@ namespace mmkv
         if (HLL_FREE_SPACE(hdr) < 3)
         {
             size_t old_len = o.len;
-            m_segment.ObjectMakeRoom(o, o.len + 3, false);
+            m_segment.ObjectMakeRoom(o, o.len + 3);
             o.len = old_len;
             hdr = (struct hllhdr *) o.RawValue();
             HLL_FREE_SPACE(hdr) = 3;
@@ -1307,7 +1307,7 @@ namespace mmkv
         /* Populate the sparse representation with as many XZERO opcodes as
          * needed to represent all the registers. */
         aux = HLL_REGISTERS;
-        m_segment.ObjectMakeRoom(obj, sparselen + 3, false);
+        m_segment.ObjectMakeRoom(obj, sparselen + 3);
         obj.len = sparselen;
         p = (uint8_t*) obj.WritableData() + HLL_HDR_SIZE;
         while (aux)
@@ -1380,7 +1380,7 @@ namespace mmkv
         Object& value_data = ret.first->second;
         if (ret.second)
         {
-            AssignObjectContent(const_cast<Object&>(ret.first->first), key, true);
+            m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), key, false);
             CreateHLLObject(value_data);
             updated++;
         }
@@ -1577,7 +1577,7 @@ namespace mmkv
              * is guaranteed to return bytes initialized to zero. */
             CreateHLLObject(value_data);
             //AssignObjectContent(const_cast<Object&>(iret.first.key()), destkey, true);
-            AssignObjectContent(const_cast<Object&>(iret.first->first), destkey, true);
+            m_segment.AssignObjectValue(const_cast<Object&>(iret.first->first), destkey, false);
         }
         else
         {

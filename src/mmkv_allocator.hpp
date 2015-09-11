@@ -50,24 +50,16 @@ namespace mmkv
     {
             size_t file_size;
             size_t size;
-            size_t keyspace_size;
-            size_t keyspace_offset;
-            size_t valuespace_offset;
+            size_t mspace_offset;
             Meta() :
-                    file_size(0), size(0), keyspace_size(0),keyspace_offset(0), valuespace_offset(1)
+                    file_size(0), size(0),  mspace_offset(1)
             {
-            }
-            inline bool IsKeyValueSplit()
-            {
-                return keyspace_offset != valuespace_offset;
             }
     };
     struct MemorySpaceInfo
     {
             boost::interprocess::offset_ptr<void> space;
-            bool is_keyspace;
-            MemorySpaceInfo() :
-                    is_keyspace(false)
+            MemorySpaceInfo()
             {
             }
     };
@@ -147,26 +139,8 @@ namespace mmkv
                 (void) hint;
                 void* p = NULL;
                 Meta* meta = (Meta*) (m_space.space.get());
-                if (m_space.is_keyspace || !meta->IsKeyValueSplit())
-                {
-                    p = mspace_malloc((char*) (meta) + meta->keyspace_offset, count * sizeof(T));
-                }
-                else
-                {
-                    p = mspace_malloc((char*) (meta) + meta->valuespace_offset, count * sizeof(T));
-                }
+                p = mspace_malloc((char*) (meta) + meta->mspace_offset, count * sizeof(T));
                 //allocate from other space
-                if (NULL == p && meta->IsKeyValueSplit())
-                {
-                    if (m_space.is_keyspace)
-                    {
-                        p = mspace_malloc((char*) (meta) + meta->valuespace_offset, count * sizeof(T));
-                    }
-                    else
-                    {
-                        p = mspace_malloc((char*) (meta) + meta->keyspace_offset, count * sizeof(T));
-                    }
-                }
                 if (NULL == p)
                 {
                     throw std::bad_alloc();
@@ -178,23 +152,7 @@ namespace mmkv
             {
                 void* p = NULL;
                 Meta* meta = (Meta*) (m_space.space.get());
-                if (!meta->IsKeyValueSplit())
-                {
-                    p = mspace_realloc((char*) (meta) + meta->keyspace_offset, oldmem, bytes);
-                }
-                else
-                {
-                    char* valuespace = (char*) (meta) + meta->valuespace_offset;
-                    if ((char*) p >= valuespace)
-                    {
-                        p = mspace_realloc(valuespace, oldmem, bytes);
-                    }
-                    else
-                    {
-                        p = mspace_realloc((char*) (meta) + meta->keyspace_offset, oldmem, bytes);
-                    }
-
-                }
+                p = mspace_realloc((char*) (meta) + meta->mspace_offset, oldmem, bytes);
                 if (NULL == p)
                 {
                     throw std::bad_alloc();
@@ -211,22 +169,7 @@ namespace mmkv
                     return;
                 Meta* meta = (Meta*) (m_space.space.get());
                 T* p = (T*) ptr;
-                if (!meta->IsKeyValueSplit())
-                {
-                    mspace_free((char*) (meta) + meta->keyspace_offset, p);
-                }
-                else
-                {
-                    char* valuespace = (char*) (meta) + meta->valuespace_offset;
-                    if ((char*) p >= valuespace)
-                    {
-                        mspace_free(valuespace, p);
-                    }
-                    else
-                    {
-                        mspace_free((char*) (meta) + meta->keyspace_offset, p);
-                    }
-                }
+                mspace_free((char*) (meta) + meta->mspace_offset, p);
             }
             inline void deallocate(const pointer &ptr, size_type n = 1)
             {
@@ -249,21 +192,7 @@ namespace mmkv
             size_type max_size() const
             {
                 Meta* meta = (Meta*) (m_space.space.get());
-                if (!meta->IsKeyValueSplit())
-                {
-                    return meta->size / sizeof(T);
-                }
-                else
-                {
-                    if (m_space.is_keyspace)
-                    {
-                        return meta->keyspace_size / sizeof(T);
-                    }
-                    else
-                    {
-                        return (meta->size - meta->keyspace_size) / sizeof(T);
-                    }
-                }
+                return meta->size / sizeof(T);
             }
 
             //!Swap segment manager. Does not throw. If each allocator is placed in
@@ -321,14 +250,7 @@ namespace mmkv
             void* get_mspace()
             {
                 Meta* meta = (Meta*) (m_space.space.get());
-                if (m_space.is_keyspace || !meta->IsKeyValueSplit())
-                {
-                    return (char*) (meta) + meta->keyspace_offset;
-                }
-                else
-                {
-                    return (char*) (meta) + meta->valuespace_offset;
-                }
+                return (char*) (meta) + meta->mspace_offset;
             }
     };
 

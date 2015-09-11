@@ -41,10 +41,9 @@ namespace mmkv
     struct CreateOptions
     {
             int64_t size;
-            float keyspace_factor;
             bool autoexpand;
             CreateOptions() :
-                    size(1024 * 1024 * 1024), keyspace_factor(0.25), autoexpand(false)
+                    size(1024 * 1024 * 1024), autoexpand(false)
             {
             }
     };
@@ -53,25 +52,27 @@ namespace mmkv
      * return -1 means break remove operations
      */
     typedef int ExpireCallback(DBID db, const std::string& key);
+    typedef int RoutineCallback();
     struct OpenOptions
     {
             std::string dir;
             bool readonly;
             bool verify;
-            bool reserve_keyspace;
-            bool reserve_valuespace;
+            bool reserve_space;
             bool use_lock;
             bool create_if_notexist;
             uint32_t hll_sparse_max_bytes;
             LogLevel log_level;
             LoggerFunc* log_func;
             ExpireCallback* expire_cb;
+            RoutineCallback* routine_cb;
             CreateOptions create_options;
 
             OpenOptions() :
-                    dir("./mmkv"), readonly(false), verify(true), reserve_keyspace(false), reserve_valuespace(false), use_lock(
-                            false), create_if_notexist(false), hll_sparse_max_bytes(3000), log_level(INFO_LOG_LEVEL), log_func(
-                    NULL), expire_cb(NULL)
+                    dir("./mmkv"), readonly(false), verify(true), reserve_space(
+                            false), use_lock(false), create_if_notexist(false), hll_sparse_max_bytes(
+                            3000), log_level(INFO_LOG_LEVEL), log_func(
+                    NULL), expire_cb(NULL),routine_cb(NULL)
             {
             }
     };
@@ -94,7 +95,8 @@ namespace mmkv
             PatternMap excludes;
             PatternArray get_patterns;
             GeoSearchOptions() :
-                    coord_type("mercator"), asc(true), radius(0), offset(0), limit(0), by_x(0), by_y(0)
+                    coord_type("mercator"), asc(true), radius(0), offset(0), limit(
+                            0), by_x(0), by_y(0)
             {
             }
     };

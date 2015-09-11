@@ -42,7 +42,7 @@ namespace mmkv
             const char* msg, int msg_len)
     {
         uint64_t timestamp = get_current_micros();
-        uint32_t mills = (timestamp / 1000) % 1000;
+        //uint32_t mills = (timestamp / 1000) % 1000;
         char timetag[256];
         struct tm tm;
         time_t now = timestamp / 1000000;

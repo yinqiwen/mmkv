@@ -83,8 +83,7 @@ namespace mmkv
 
             bool IsExpired(DBID db, const Data& key, const Object& obj);
             void DestroyObjectContent(const Object& obj);
-            void AssignObjectContent(const Object& obj, const Data& data, bool in_keyspace);
-            Object CloneStrObject(const Object& obi, bool in_keyspace);
+            Object CloneStrObject(const Object& obi);
 
             void CreateHLLObject(Object& obj);
             int HLLSparseToDense(Object& o);
@@ -123,6 +122,9 @@ namespace mmkv
             int UpdateZSetScore(ZSet& zset, const Object& value, long double score, long double new_score);
             int GeoSearchWithMinLimit(DBID db, const Data& key, const GeoSearchOptions& options, int coord_type,
                     long double x, long double y, int min_limit, const StringArrayResult& results);
+
+            int IncrementalRehash();
+            int RemoveExpiredKeys();
         public:
             MMKVImpl();
             MemorySegmentManager& GetMemoryManager()
@@ -131,8 +133,7 @@ namespace mmkv
             }
             int Open(const OpenOptions& open_options);
 
-            size_t KeySpaceUsed();
-            size_t ValueSpaceUsed();
+            size_t MSpaceUsed();
 
             template<typename T>
             ConstructorProxy<T> GetObject(DBID db, const Data& key, uint32_t expected_type, bool create_if_notexist,
@@ -156,17 +157,18 @@ namespace mmkv
                     std::pair<MMKVTable::iterator, bool> ret = kv->insert(MMKVTable::value_type(tmpkey, Object()));
                     //Object& value_data = const_cast<Object&>(ret.first.value());
                     Object& value_data = ret.first->second;
-                    if (ret.second || IsExpired(db, key, value_data))
+                    if (ret.second)
                     {
-                        if (ret.second)
-                        {
-                            m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), key, true);
-                        }
-                        else
-                        {
-                            GenericDelValue(value_data);
-                        }
-                        m_segment.ObjectMakeRoom(value_data, sizeof(T), false);
+                        m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), key, false);
+//                        if (ret.second)
+//                        {
+//                            m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), key, false);
+//                        }
+//                        else
+//                        {
+//                            GenericDelValue(value_data);
+//                        }
+                        m_segment.ObjectMakeRoom(value_data, sizeof(T));
                         value_data.type = expected_type;
                         proxy.invoke_constructor = true;
                         proxy.ptr = (T*) value_data.RawValue();
@@ -373,9 +375,9 @@ namespace mmkv
             int64_t DBSize(DBID db);
             int FlushDB(DBID db);
             int FlushAll();
-            int GetAllDBID(DBIDArray& ids);
+            int GetAllDBInfo(DBInfoArray& dbs);
 
-            int RemoveExpiredKeys();
+            int Routine();
 
             int Backup(const std::string& path);
             int Restore(const std::string& from_file);

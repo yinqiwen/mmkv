@@ -62,6 +62,6 @@ int main()
         return 0;
     }
     mmkv::RunAllTests();
-    printf("##KeySpaceUsed:%llu, ValueSpaceUsed:%llu\n", g_test_kv->KeySpaceUsed(), g_test_kv->ValueSpaceUsed());
+    printf("##MSpaceUsed:%llu\n", g_test_kv->MSpaceUsed());
     return 0;
 }

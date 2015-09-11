@@ -93,9 +93,9 @@ namespace mmkv
                 table->erase(ret.first);
                 return ERR_ENTRY_NOT_EXIST;
             }
-            AssignObjectContent(const_cast<Object&>(kk), key, true);
+            m_segment.AssignObjectValue(const_cast<Object&>(kk), key, false);
         }
-        AssignObjectContent(value_data, value, false);
+        m_segment.AssignObjectValue(value_data, value, true);
         if (ttl > 0)
         {
             value_data.hasttl = true;
@@ -133,10 +133,10 @@ namespace mmkv
         {
             return ERR_INVALID_TYPE;
         }
-        if (IsExpired(db, key, value_data))
-        {
-            return 0;
-        }
+//        if (IsExpired(db, key, value_data))
+//        {
+//            return 0;
+//        }
         value_data.ToString(value);
         return 0;
     }
@@ -174,7 +174,7 @@ namespace mmkv
                 return ERR_INVALID_TYPE;
             }
             std::string tmpstr;
-            if (!IsExpired(db, key, value_data))
+            //if (!IsExpired(db, key, value_data))
             {
                 value_data.ToString(tmpstr);
             }
@@ -204,6 +204,7 @@ namespace mmkv
         {
             return ERR_ENTRY_NOT_EXIST;
         }
+
         bool created = false;
         Object& value_data = FindOrCreateStringValue(kv, key, value, created);
         if (!created)
@@ -212,14 +213,14 @@ namespace mmkv
             {
                 return ERR_INVALID_TYPE;
             }
-            if (!IsExpired(db, key, value_data))
+            //if (!IsExpired(db, key, value_data))
             {
                 value_data.ToString(old_value);
             }
             Object tmpkey(key, false);
             ClearTTL(db, tmpkey, value_data);
             DestroyObjectContent(value_data);
-            m_segment.AssignObjectValue(value_data, value, false);
+            m_segment.AssignObjectValue(value_data, value, true);
             return 0;
         }
         return 1; //create new entry
@@ -333,7 +334,7 @@ namespace mmkv
         }
         else
         {
-            m_segment.AssignObjectValue(const_cast<Object&>(kk), key, true);
+            m_segment.AssignObjectValue(const_cast<Object&>(kk), key, false);
             new_val = increment;
             value_data.SetInteger(increment);
         }
@@ -393,7 +394,7 @@ namespace mmkv
         }
         else
         {
-            m_segment.AssignObjectValue(const_cast<Object&>(kk), key, true);
+            m_segment.AssignObjectValue(const_cast<Object&>(kk), key, false);
             new_val = increment;
             if (is_integer(increment))
             {
@@ -516,14 +517,14 @@ namespace mmkv
             ClearTTL(db, kk, value_data);
             if (value_data.IsInteger() || value_data.len < (offset + value.Len()))
             {
-                m_segment.ObjectMakeRoom(value_data, offset + value.Len(), false);
+                m_segment.ObjectMakeRoom(value_data, offset + value.Len());
             }
         }
         else
         {
             memset(value_data.data, 0, sizeof(value_data.data));
-            m_segment.AssignObjectValue(const_cast<Object&>(kk), key, true);
-            m_segment.ObjectMakeRoom(value_data, offset + value.Len(), false);
+            m_segment.AssignObjectValue(const_cast<Object&>(kk), key, false);
+            m_segment.ObjectMakeRoom(value_data, offset + value.Len());
         }
         memcpy(value_data.WritableData() + offset, value.Value(), value.Len());
         return value_data.len;

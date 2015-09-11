@@ -446,7 +446,7 @@ namespace mmkv
 
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         EnsureWritableValueSpace();
-        Allocator<char> allocator = m_segment.ValueAllocator<char>();
+        Allocator<char> allocator = m_segment.MSpaceAllocator<char>();
         int err;
         ZSet* zset = GetObject<ZSet>(db, key, V_TYPE_ZSET, true, err)(allocator);
         if (0 != err)

@@ -34,7 +34,6 @@
 #include "logger_macros.hpp"
 namespace mmkv
 {
-
     class MMapBuf
     {
         private:

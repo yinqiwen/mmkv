@@ -84,7 +84,7 @@ namespace mmkv
                     it++;
                 }
                 Object& inserted = *(list->insert(it, Object()));
-                m_segment.AssignObjectValue(inserted, val, false);
+                m_segment.AssignObjectValue(inserted, val, true);
                 break;
             }
             it++;
@@ -142,7 +142,7 @@ namespace mmkv
 
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         EnsureWritableValueSpace();
-        ObjectAllocator alloc = m_segment.ValueAllocator<Object>();
+        ObjectAllocator alloc = m_segment.MSpaceAllocator<Object>();
         StringList* list = GetObject<StringList>(db, key, V_TYPE_LIST, nx ? false : true, err)(alloc);
         if (0 != err)
         {
@@ -155,7 +155,7 @@ namespace mmkv
         for (size_t i = 0; i < vals.size(); i++)
         {
             list->push_front(Object());
-            m_segment.AssignObjectValue(list->at(0), vals[i], false);
+            m_segment.AssignObjectValue(list->at(0), vals[i], true);
         }
         return list->size();
     }
@@ -261,7 +261,7 @@ namespace mmkv
         }
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
-        EnsureWritableValueSpace();
+        //EnsureWritableValueSpace();
         StringList* list = GetObject<StringList>(db, key, V_TYPE_LIST, false, err)();
         if (NULL == list || 0 != err)
         {
@@ -277,7 +277,7 @@ namespace mmkv
         }
         Object& data = list->at(index);
         DestroyObjectContent(data);
-        m_segment.AssignObjectValue(data, val, false);
+        m_segment.AssignObjectValue(data, val, true);
         return 0;
     }
     int MMKVImpl::LTrim(DBID db, const Data& key, int start, int end)
@@ -381,7 +381,7 @@ namespace mmkv
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         EnsureWritableValueSpace();
-        ObjectAllocator alloc = m_segment.ValueAllocator<Object>();
+        ObjectAllocator alloc = m_segment.MSpaceAllocator<Object>();
         StringList* src_list = GetObject<StringList>(db, source, V_TYPE_LIST, false, err)();
         if (0 != err)
         {
@@ -417,7 +417,7 @@ namespace mmkv
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         EnsureWritableValueSpace();
-        ObjectAllocator alloc = m_segment.ValueAllocator<Object>();
+        ObjectAllocator alloc = m_segment.MSpaceAllocator<Object>();
         StringList* list = GetObject<StringList>(db, key, V_TYPE_LIST, nx ? false : true, err)(alloc);
         if (0 != err)
         {
@@ -433,7 +433,7 @@ namespace mmkv
         {
             Object& data = list->at(old_size + i);
             data.Clear();
-            AssignObjectContent(data, vals[i], false);
+            m_segment.AssignObjectValue(data, vals[i], true);
         }
         return list->size();
     }

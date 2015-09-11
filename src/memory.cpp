@@ -69,7 +69,7 @@ namespace mmkv
         uint32_t left = size % page;
         if (left > 0)
         {
-            return size + (page - left);
+            return size - left;
         }
         return size;
     }
@@ -105,7 +105,8 @@ namespace mmkv
     };
 
     MemorySegmentManager::MemorySegmentManager() :
-            m_readonly(false), m_lock_enable(false), m_named_objs(NULL), m_global_lock(NULL), m_data_buf(NULL)
+            m_readonly(false), m_lock_enable(false), m_named_objs(NULL), m_global_lock(
+                    NULL), m_data_buf(NULL)
     {
 
     }
@@ -118,22 +119,12 @@ namespace mmkv
     {
         Meta* meta = (Meta*) m_data_buf;
         madvise(m_data_buf, meta->file_size, MADV_RANDOM);
-        void* key_space = (char*) meta + kHeaderLength + kMetaLength;
-        void* value_space = NULL;
-        if (meta->IsKeyValueSplit())
-        {
-            value_space = (char*) key_space + meta->valuespace_offset;
-        }
-
+        void* mspace = (char*) meta + kHeaderLength + kMetaLength;
         if (!m_open_options.readonly)
         {
-            if (m_open_options.reserve_keyspace)
+            if (m_open_options.reserve_space)
             {
-                mlock(key_space, meta->keyspace_size);
-            }
-            if (m_open_options.reserve_valuespace && NULL != value_space)
-            {
-                mlock(value_space, meta->size - meta->keyspace_size);
+                mlock(mspace, meta->size);
             }
         }
         return 0;
@@ -186,7 +177,9 @@ namespace mmkv
         }
         else
         {
-            open_ret = data_buf.OpenWrite(data_path, open_options.create_options.size, open_options.create_if_notexist);
+            open_ret = data_buf.OpenWrite(data_path,
+                    open_options.create_options.size,
+                    open_options.create_if_notexist);
         }
 
         if (open_ret < 0)
@@ -206,54 +199,35 @@ namespace mmkv
 
     int MemorySegmentManager::ReCreate(bool overwrite)
     {
-        MemorySpaceInfo key_space_info, value_space_info;
-        key_space_info.is_keyspace = true;
-        key_space_info.space = m_data_buf;
-        value_space_info.space = m_data_buf;
-        value_space_info.is_keyspace = false;
+        MemorySpaceInfo mspace_info;
+        mspace_info.space = m_data_buf;
 
         Meta* meta = (Meta*) m_data_buf;
         Header* header = (Header*) ((char*) m_data_buf + kMetaLength);
-        bool split_keyvalue_space = true;
         if (overwrite) //create file
         {
             meta->file_size = m_open_options.create_options.size;
-            meta->size = m_open_options.create_options.size - kHeaderLength - kMetaLength;
-            meta->keyspace_size = (int64_t) (meta->size * m_open_options.create_options.keyspace_factor);
-            //allign key space size to 4096(page size)
-            uint32_t page_size = 4096;
-            meta->keyspace_size = allign_page(meta->keyspace_size);
-            split_keyvalue_space = m_open_options.create_options.keyspace_factor < 1;
+            meta->size = m_open_options.create_options.size - kHeaderLength
+                    - kMetaLength;
+            meta->size = allign_page(meta->size);
         }
 
-        void* key_space = (char*) meta + kHeaderLength + kMetaLength;
-        void* key_mspace = create_mspace_with_base(key_space, meta->keyspace_size, 0, overwrite);
+        void* mspace_buf = (char*) meta + kHeaderLength + kMetaLength;
+        void* mspace = create_mspace_with_base(mspace_buf, meta->size, 0,
+                overwrite);
 
-        void* value_space = NULL;
-        void* value_mspace = NULL;
-        if (split_keyvalue_space || meta->IsKeyValueSplit())
-        {
-            value_space = (char*) key_space + meta->keyspace_size;
-            value_mspace = create_mspace_with_base(value_space, meta->size - meta->keyspace_size, 0, overwrite);
-        }
-        else
-        {
-            value_space = key_space;
-            value_mspace = key_mspace;
-        }
         if (overwrite)
         {
-            meta->keyspace_offset = (char*) key_mspace - (char*) m_data_buf;
-            meta->valuespace_offset = (char*) value_mspace - (char*) m_data_buf;
+            meta->mspace_offset = (char*) mspace - (char*) m_data_buf;
         }
 
-        m_key_allocator = Allocator<char>(key_space_info);
-        m_value_allocator = Allocator<char>(value_space_info);
+        m_space_allocator = Allocator<char>(mspace_info);
         if (overwrite)
         {
-            StringObjectTableAllocator allocator(m_key_allocator);
+            StringObjectTableAllocator allocator(m_space_allocator);
             memset(header->named_objects, 0, sizeof(StringObjectTable));
-            ::new ((void*) (header->named_objects)) StringObjectTable(std::less<Object>(), allocator);
+            ::new ((void*) (header->named_objects)) StringObjectTable(
+                    std::less<Object>(), allocator);
         }
         m_named_objs = (StringObjectTable*) (header->named_objects);
         return 0;
@@ -267,15 +241,21 @@ namespace mmkv
             return -1;
         }
         Meta* meta = (Meta*) m_data_buf;
-        size_t top_size = mspace_top_size((char*) (meta) + meta->valuespace_offset);
+        size_t top_size = mspace_top_size((char*) (meta) + meta->mspace_offset);
         if (space_size == 0)
         {
-            size_t used =  meta->size - top_size;
-            space_size = used * 3 + 10 * 1024 * 1024;
+            if (top_size < (meta->size >> 1))
+            {
+                space_size = meta->file_size * 2;
+            }
         }
         if (meta->size < space_size)
         {
             size_t new_size = space_size;
+            if (new_size < static_cast<size_t>(meta->size * 1.5))
+            {
+                new_size = static_cast<size_t>(meta->size * 1.5);
+            }
             return Expand(new_size);
         }
         return 0;
@@ -293,6 +273,8 @@ namespace mmkv
         {
             return 0;
         }
+        uint64_t micros = get_current_micros();
+        size_t old_file_size = meta->file_size;
         new_size = allign_page(new_size);
         size_t inc = new_size - meta->file_size;
 
@@ -312,13 +294,16 @@ namespace mmkv
         PostInit();
         meta = (Meta*) m_data_buf;
         meta->file_size = m_open_options.create_options.size;
-        meta->size = m_open_options.create_options.size - kHeaderLength - kMetaLength;
-        void* value_mspace = (char*) m_data_buf + meta->valuespace_offset;
+        meta->size = m_open_options.create_options.size - kHeaderLength
+                - kMetaLength;
+        void* value_mspace = (char*) m_data_buf + meta->mspace_offset;
         mspace_inc_size(value_mspace, inc);
+        INFO_LOG("Cost %lluus to expand store from %llu to %llu.",
+                get_current_micros() - micros, old_file_size, meta->file_size);
         return 1;
     }
 
-    bool MemorySegmentManager::ObjectMakeRoom(Object& obj, size_t size, bool in_keyspace)
+    bool MemorySegmentManager::ObjectMakeRoom(Object& obj, size_t size)
     {
         if (size <= obj.len && obj.encoding != OBJ_ENCODING_INT)
         {
@@ -331,7 +316,7 @@ namespace mmkv
         }
         if (size > 8)
         {
-            buf = Allocate(size, in_keyspace);
+            buf = Allocate(size);
             if (obj.len > 0)
             {
                 if (obj.encoding == OBJ_ENCODING_INT)
@@ -354,13 +339,14 @@ namespace mmkv
         return true;
     }
 
-    bool MemorySegmentManager::AssignObjectValue(Object& obj, const Data& value, bool in_keyspace)
+    bool MemorySegmentManager::AssignObjectValue(Object& obj, const Data& value,
+            bool try_int_encoding)
     {
         if (obj.IsInteger())
         {
             return true;
         }
-        if (!in_keyspace) //try int encoding in value space
+        if (try_int_encoding) //try int encoding in value space
         {
             if (obj.SetInteger(value))
             {
@@ -381,23 +367,16 @@ namespace mmkv
             }
             return true;
         }
-        void* buf = Allocate(value.Len(), in_keyspace);
+        void* buf = Allocate(value.Len());
         memcpy(buf, value.Value(), value.Len());
         obj.len = value.Len();
         obj.SetValue(buf);
         return true;
     }
 
-    void* MemorySegmentManager::Allocate(size_t size, bool in_keyspace)
+    void* MemorySegmentManager::Allocate(size_t size)
     {
-        if (in_keyspace)
-        {
-            return m_key_allocator.allocate(size);
-        }
-        else
-        {
-            return m_value_allocator.allocate(size);
-        }
+        return m_space_allocator.allocate(size);
     }
     void MemorySegmentManager::Deallocate(void* ptr)
     {
@@ -405,15 +384,11 @@ namespace mmkv
         {
             return;
         }
-        m_key_allocator.deallocate_ptr((char*) ptr);
+        m_space_allocator.deallocate_ptr((char*) ptr);
     }
-    Allocator<char> MemorySegmentManager::GetKeySpaceAllocator()
+    Allocator<char> MemorySegmentManager::GetMSpaceAllocator()
     {
-        return m_key_allocator;
-    }
-    Allocator<char> MemorySegmentManager::GetValueSpaceAllocator()
-    {
-        return m_value_allocator;
+        return m_space_allocator;
     }
 
     int MemorySegmentManager::GetReaderCountIndex()
@@ -424,7 +399,8 @@ namespace mmkv
         }
         for (int i = 0; i < kMaxReaderProcCount; i++)
         {
-            if (m_global_lock->readers[i].pid == get_current_pid() || m_global_lock->readers[i].pid == 0)
+            if (m_global_lock->readers[i].pid == get_current_pid()
+                    || m_global_lock->readers[i].pid == 0)
             {
                 m_global_lock->readers[i].pid = get_current_pid();
                 g_reader_count_index = i;
@@ -521,8 +497,8 @@ namespace mmkv
         return true;
     }
 
-    static int dump_cksum_str(XXH64_state_t* cksm64, XXH32_state_t* cksm32, const std::string& cksm_file,
-            std::string& cksm)
+    static int dump_cksum_str(XXH64_state_t* cksm64, XXH32_state_t* cksm32,
+            const std::string& cksm_file, std::string& cksm)
     {
         char xxhashsum[256];
         uint32_t offset = 0;
@@ -548,7 +524,8 @@ namespace mmkv
         fclose(dest_file);
     }
 
-    static void xxhash_cksum_callback(const void* data, uint32_t len, void* cbdata)
+    static void xxhash_cksum_callback(const void* data, uint32_t len,
+            void* cbdata)
     {
         void** tmp = (void**) cbdata;
         XXH64_state_t* cksm64 = (XXH64_state_t*) tmp[0];
@@ -579,12 +556,9 @@ namespace mmkv
         uint16_t meta_len = sizeof(Meta);
         Header* header = (Header*) ((char*) m_data_buf + kMetaLength);
         uint32_t header_len = sizeof(Header);
-        void* key_mspace = (char*) meta + meta->keyspace_offset;
+        void* key_mspace = (char*) meta + meta->mspace_offset;
         void* key_space_start = (char*) meta + kMetaLength + kHeaderLength;
         void* key_mspace_top = mspace_top_address(key_mspace);
-        void* value_mspace = (char*) meta + meta->valuespace_offset;
-        void* value_space_start = (char*) meta + kMetaLength + kHeaderLength + meta->keyspace_size;
-        void* value_mspace_top = mspace_top_address(value_mspace);
         uint32_t now = time(NULL);
 
         FILE* dest_file = fopen(path.c_str(), "w");
@@ -636,25 +610,13 @@ namespace mmkv
         xxhash_cksum_callback(header, header_len, chsumset);
         //compress & save key space
         if (0
-                != lz4_compress_tofile((char*) key_space_start, (char*) key_mspace_top - (char*) key_space_start,
+                != lz4_compress_tofile((char*) key_space_start,
+                        (char*) key_mspace_top - (char*) key_space_start,
                         dest_file, xxhash_cksum_callback, chsumset))
         {
             ERROR_LOG("Failed to compress key space content");
             err = -1;
             goto _end;
-        }
-        //compress & save value space
-        if (meta->IsKeyValueSplit())
-        {
-            if (0
-                    != lz4_compress_tofile((char*) value_space_start,
-                            (char*) value_mspace_top - (char*) value_space_start, dest_file, xxhash_cksum_callback,
-                            chsumset))
-            {
-                ERROR_LOG("Failed to compress value space content");
-                err = -1;
-                goto _end;
-            }
         }
 
         dump_cksum_str(cksm64, cksm32, path + ".cksm", cksm);
@@ -691,7 +653,8 @@ namespace mmkv
         return err;
     }
 
-    int MemorySegmentManager::Restore(const std::string& from_file, const std::string& to_file)
+    int MemorySegmentManager::Restore(const std::string& from_file,
+            const std::string& to_file)
     {
         FILE* dest_file = NULL;
         int err = 0;
@@ -768,9 +731,11 @@ namespace mmkv
             goto _end;
         }
         memcpy(&header_len, backup.buf + buf_cursor, sizeof(uint32_t));
-        if (header_len > sizeof(Header) || backup.size < buf_cursor + header_len + sizeof(uint32_t))
+        if (header_len > sizeof(Header)
+                || backup.size < buf_cursor + header_len + sizeof(uint32_t))
         {
-            ERROR_LOG("Invalid header len:%u compare to %u", header_len, sizeof(Header));
+            ERROR_LOG("Invalid header len:%u compare to %u", header_len,
+                    sizeof(Header));
             err = -1;
             goto _end;
         }
@@ -782,7 +747,8 @@ namespace mmkv
         dest_file = fopen(to_file.c_str(), "w");
         if (NULL == dest_file)
         {
-            ERROR_LOG("Failed to open backup file:%s to write.", to_file.c_str());
+            ERROR_LOG("Failed to open backup file:%s to write.",
+                    to_file.c_str());
             err = -1;
             goto _end;
         }
@@ -805,7 +771,8 @@ namespace mmkv
         fseek(dest_file, kMetaLength + kHeaderLength, SEEK_SET);
 
         compressed_key_space = backup.buf + buf_cursor;
-        if (lz4_decompress_tofile(compressed_key_space, backup.size - buf_cursor, dest_file, &chunk_decomp_size,
+        if (lz4_decompress_tofile(compressed_key_space,
+                backup.size - buf_cursor, dest_file, &chunk_decomp_size,
                 xxhash_cksum_callback, chsumset) != 0)
         {
             ERROR_LOG("decompress header content failed");
@@ -814,18 +781,8 @@ namespace mmkv
         }
         //
         buf_cursor += chunk_decomp_size;
-        fseek(dest_file, kMetaLength + kHeaderLength + meta.keyspace_size, SEEK_SET);
+        //fseek(dest_file, kMetaLength + kHeaderLength + meta.size, SEEK_SET);
         compressed_value_space = backup.buf + buf_cursor;
-        if (meta.IsKeyValueSplit())
-        {
-            if (lz4_decompress_tofile(compressed_value_space, backup.size - buf_cursor, dest_file, &chunk_decomp_size,
-                    xxhash_cksum_callback, chsumset) != 0)
-            {
-                ERROR_LOG("decompress value space content failed");
-                err = -1;
-                goto _end;
-            }
-        }
 
         dump_cksum_str(cksm64, cksm32, to_file + ".cksm", cksm);
         INFO_LOG("Restore cksm:%s", cksm.c_str());
@@ -855,27 +812,25 @@ namespace mmkv
             ERROR_LOG("Meta part is not equal.");
             return false;
         }
-        if (0 != memcmp((char*) m_data_buf + kMetaLength, cmpbuf.buf + kMetaLength, sizeof(Header)))
+        if (0
+                != memcmp((char*) m_data_buf + kMetaLength,
+                        cmpbuf.buf + kMetaLength, sizeof(Header)))
         {
             ERROR_LOG("Header part is not equal.");
             return false;
         }
         Meta* meta = (Meta*) m_data_buf;
-        char* key_mspace = (char*) meta + meta->keyspace_offset;
+        char* key_mspace = (char*) meta + meta->mspace_offset;
         char* key_space_start = (char*) meta + kMetaLength + kHeaderLength;
         char* key_mspace_stop = (char*) mspace_top_address(key_mspace);
-        char* value_mspace = (char*) meta + meta->valuespace_offset;
-        char* value_space_start = (char*) meta + kMetaLength + kHeaderLength + meta->keyspace_size;
-        char* value_mspace_stop = (char*) mspace_top_address(value_mspace);
 
-        char* other_key_mspace = cmpbuf.buf + meta->keyspace_offset;
+        char* other_key_mspace = cmpbuf.buf + meta->mspace_offset;
         char* other_key_space_start = cmpbuf.buf + kMetaLength + kHeaderLength;
-        char* other_key_mspace_stop = (char*) mspace_top_address(other_key_mspace);
-        char* other_value_mspace = cmpbuf.buf + meta->valuespace_offset;
-        char* other_value_space_start = cmpbuf.buf + kMetaLength + kHeaderLength + meta->keyspace_size;
-        char* other_value_mspace_stop = (char*) mspace_top_address(other_value_mspace);
+        char* other_key_mspace_stop = (char*) mspace_top_address(
+                other_key_mspace);
 
-        if (key_mspace_stop - key_space_start != other_key_mspace_stop - other_key_space_start)
+        if (key_mspace_stop - key_space_start
+                != other_key_mspace_stop - other_key_space_start)
         {
             WARN_LOG("Key space length is not equal.");
             return false;
@@ -885,56 +840,30 @@ namespace mmkv
         while (rest > 0)
         {
             size_t len = rest > 4096 ? 4096 : rest;
-            if (0 != memcmp(key_space_start + cmpoff, other_key_space_start + cmpoff, len))
+            if (0
+                    != memcmp(key_space_start + cmpoff,
+                            other_key_space_start + cmpoff, len))
             {
-                WARN_LOG("Key space  is not equal at offset:%llu with len:%u.", cmpoff, len);
+                WARN_LOG("Key space  is not equal at offset:%llu with len:%u.",
+                        cmpoff, len);
                 return false;
             }
             cmpoff += len;
             rest -= len;
         }
-        if (meta->IsKeyValueSplit())
-        {
-            if (value_mspace_stop - value_space_start != other_value_mspace_stop - other_value_space_start)
-            {
-                WARN_LOG("Value space length is not equal.");
-                return false;
-            }
-            cmpoff = 0;
-            rest = value_mspace_stop - value_space_start;
-            while (rest > 0)
-            {
-                size_t len = rest > 4096 ? 4096 : rest;
-                if (0 != memcmp(value_space_start + cmpoff, other_value_space_start + cmpoff, len))
-                {
-                    WARN_LOG("Value space  is not equal at offset:%llu with len:%u.", cmpoff, len);
-                    return false;
-                }
-                cmpoff += len;
-                rest -= len;
-            }
-        }
         return true;
     }
 
-    size_t MemorySegmentManager::KeySpaceUsed()
+    size_t MemorySegmentManager::MSpaceUsed()
     {
-        return mspace_used(m_key_allocator.get_mspace());
+        return mspace_used(m_space_allocator.get_mspace());
     }
 
-    size_t MemorySegmentManager::keySpaceCapacity()
+    size_t MemorySegmentManager::MSpaceCapacity()
     {
-        return mspace_footprint(m_key_allocator.get_mspace());
+        return mspace_footprint(m_space_allocator.get_mspace());
     }
 
-    size_t MemorySegmentManager::ValueSpaceUsed()
-    {
-        return mspace_used(m_value_allocator.get_mspace());
-    }
-    size_t MemorySegmentManager::ValueSpaceCapacity()
-    {
-        return mspace_footprint(m_value_allocator.get_mspace());
-    }
     bool MemorySegmentManager::LockEnable()
     {
         return m_lock_enable;

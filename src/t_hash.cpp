@@ -140,7 +140,7 @@ namespace mmkv
 
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         EnsureWritableValueSpace();
-        StringMapAllocator allocator = m_segment.ValueAllocator<StringPair>();
+        StringMapAllocator allocator = m_segment.MSpaceAllocator<StringPair>();
         StringHashTable* hash = GetObject<StringHashTable>(db, key, V_TYPE_HASH, true, err)(allocator);
         if (NULL == hash || 0 != err)
         {
@@ -150,7 +150,7 @@ namespace mmkv
                 StringHashTable::value_type(Object(field, true), Object()));
         if (ret.second)
         {
-            m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), field, false);
+            m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), field, true);
             ret.first->second.SetInteger(increment);
             new_val = increment;
         }
@@ -178,7 +178,7 @@ namespace mmkv
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         EnsureWritableValueSpace();
-        StringMapAllocator allocator = m_segment.ValueAllocator<StringPair>();
+        StringMapAllocator allocator = m_segment.MSpaceAllocator<StringPair>();
         StringHashTable* hash = GetObject<StringHashTable>(db, key, V_TYPE_HASH, true, err)(allocator);
         if (NULL == hash || 0 != err)
         {
@@ -188,7 +188,7 @@ namespace mmkv
                 StringHashTable::value_type(Object(field, true), Object()));
         if (ret.second)
         {
-            m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), field, false);
+            m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), field, true);
             if (is_integer(increment))
             {
                 ret.first->second.SetInteger((int64_t) increment);
@@ -198,7 +198,7 @@ namespace mmkv
                 char buf[256];
                 int dlen = double2string(buf, sizeof(buf), increment, true);
                 Data tmp(buf, dlen);
-                m_segment.AssignObjectValue(ret.first->second, tmp, false);
+                m_segment.AssignObjectValue(ret.first->second, tmp, true);
             }
             new_val = increment;
         }
@@ -313,7 +313,7 @@ namespace mmkv
 
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         EnsureWritableValueSpace();
-        StringMapAllocator allocator = m_segment.ValueAllocator<StringPair>();
+        StringMapAllocator allocator = m_segment.MSpaceAllocator<StringPair>();
         StringHashTable* hash = GetObject<StringHashTable>(db, key, V_TYPE_HASH, true, err)(allocator);
         if (NULL == hash || 0 != err)
         {
@@ -326,13 +326,13 @@ namespace mmkv
             std::pair<StringHashTable::iterator, bool> ret = hash->insert(StringHashTable::value_type(tmpk, tmpv));
             if (ret.second)
             {
-                m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), field_vals[i].first, false);
+                m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), field_vals[i].first, true);
             }
             else
             {
                 DestroyObjectContent(ret.first->second);
             }
-            m_segment.AssignObjectValue(ret.first->second, field_vals[i].second, false);
+            m_segment.AssignObjectValue(ret.first->second, field_vals[i].second, true);
         }
         return 0;
     }
@@ -348,7 +348,7 @@ namespace mmkv
         }
         int match_count = 0;
         int pos = cursor >= hash->size() ? hash->size() : cursor;
-        MMKVTable::iterator it = hash->begin();
+        StringHashTable::iterator it = hash->begin();
         it.increment_by(pos);
         while (it != hash->end())
         {
@@ -379,7 +379,7 @@ namespace mmkv
         int err = 0;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         EnsureWritableValueSpace();
-        StringMapAllocator allocator = m_segment.ValueAllocator<StringPair>();
+        StringMapAllocator allocator = m_segment.MSpaceAllocator<StringPair>();
         StringHashTable* hash = GetObject<StringHashTable>(db, key, V_TYPE_HASH, true, err)(allocator);
         if (NULL == hash || 0 != err)
         {
@@ -390,7 +390,7 @@ namespace mmkv
         std::pair<StringHashTable::iterator, bool> ret = hash->insert(StringHashTable::value_type(tmpk, tmpv));
         if (ret.second)
         {
-            m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), field, false);
+            m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), field, true);
         }
         else
         {
@@ -400,7 +400,7 @@ namespace mmkv
             }
             DestroyObjectContent(ret.first->second);
         }
-        m_segment.AssignObjectValue(ret.first->second, val, false);
+        m_segment.AssignObjectValue(ret.first->second, val, true);
         return ret.second ? 1 : 0;
     }
     int MMKVImpl::HStrlen(DBID db, const Data& key, const Data& field)
@@ -439,10 +439,7 @@ namespace mmkv
         StringHashTable::iterator it = hash->begin();
         while (it != hash->end())
         {
-            //if (it.isfilled())
-            {
-                it->second.ToString(vals.Get());
-            }
+            it->second.ToString(vals.Get());
             it++;
         }
         return 0;

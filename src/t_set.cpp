@@ -47,7 +47,7 @@ namespace mmkv
 
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         EnsureWritableValueSpace();
-        ObjectAllocator allocator = m_segment.ValueAllocator<Object>();
+        ObjectAllocator allocator = m_segment.MSpaceAllocator<Object>();
         StringSet* set = GetObject<StringSet>(db, key, V_TYPE_SET, true, err)(std::less<Object>(), allocator);
         if (0 != err)
         {
@@ -59,7 +59,7 @@ namespace mmkv
             std::pair<StringSet::iterator, bool> ret = set->insert(Object(elements[i], true));
             if (ret.second)
             {
-                AssignObjectContent(*(ret.first), elements[i], false);
+                m_segment.AssignObjectValue(*(ret.first), elements[i], true);
                 inserted++;
             }
         }
@@ -94,7 +94,7 @@ namespace mmkv
         StdObjectSet* result = NULL;
         StdObjectSet* cmp = NULL;
         int current_result_index = 0;
-        ObjectAllocator allocator = m_segment.ValueAllocator<Object>();
+        ObjectAllocator allocator = m_segment.MSpaceAllocator<Object>();
         StringSet empty_set(std::less<Object>(), allocator);
 
         for (size_t i = 0; i < keys.size(); i++)
@@ -114,7 +114,7 @@ namespace mmkv
 
         if (NULL != dest)
         {
-            ObjectAllocator allocator = m_segment.ValueAllocator<Object>();
+            ObjectAllocator allocator = m_segment.MSpaceAllocator<Object>();
             destset = GetObject<StringSet>(db, *dest, V_TYPE_SET, true, err)(std::less<Object>(), allocator);
             if (0 != err)
             {
@@ -246,7 +246,7 @@ namespace mmkv
             StdObjectSet::iterator cit = results[result_index].begin();
             while (cit != results[result_index].end())
             {
-                Object clone = CloneStrObject(*cit, false);
+                Object clone = CloneStrObject(*cit);
                 destset->insert(clone);
                 cit++;
             }
@@ -333,7 +333,7 @@ namespace mmkv
         {
             return err;
         }
-        ObjectAllocator allocator = m_segment.ValueAllocator<Object>();
+        ObjectAllocator allocator = m_segment.MSpaceAllocator<Object>();
         StringSet* set2 = GetObject<StringSet>(db, destination, V_TYPE_SET, true, err)(std::less<Object>(), allocator);
         if (NULL == set2 || 0 != err)
         {

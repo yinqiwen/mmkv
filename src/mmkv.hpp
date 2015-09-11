@@ -73,7 +73,12 @@ namespace mmkv
 
     enum ObjectType
     {
-        V_TYPE_STRING = 0, V_TYPE_HASH = 1, V_TYPE_SET = 2, V_TYPE_ZSET = 3, V_TYPE_LIST = 4, V_TYPE_POD = 5
+        V_TYPE_STRING = 0,
+        V_TYPE_HASH = 1,
+        V_TYPE_SET = 2,
+        V_TYPE_ZSET = 3,
+        V_TYPE_LIST = 4,
+        V_TYPE_POD = 5
     };
 
     struct Data
@@ -127,6 +132,18 @@ namespace mmkv
             }
     };
 
+    struct DBInfo
+    {
+            DBID id;
+            bool rehashing;
+            float rehash_progress;
+            size_t expires;
+            DBInfo() :
+                    id(0), rehashing(false), rehash_progress(0),expires(0)
+            {
+            }
+    };
+
     struct ScoreData
     {
             long double score;
@@ -144,6 +161,7 @@ namespace mmkv
     typedef std::vector<ScoreData> ScoreDataArray;
     typedef std::vector<uint32_t> WeightArray;
     typedef std::vector<DBID> DBIDArray;
+    typedef std::vector<DBInfo> DBInfoArray;
 
     class StringArrayResult
     {
@@ -263,7 +281,8 @@ namespace mmkv
                 }
             }
             template<typename R1, typename R2, typename R3, typename R4>
-            T* operator()(const R1& a1, const R2& a2, const R3& a3, const R4& a4)
+            T* operator()(const R1& a1, const R2& a2, const R3& a3,
+                    const R4& a4)
             {
                 if (NULL == ptr)
                 {
@@ -332,7 +351,8 @@ namespace mmkv
     {
             long double x, y;
             Data value;
-            GeoPoint(long double xx = 0, long double yy = 0, const Data& vv = "") :
+            GeoPoint(long double xx = 0, long double yy = 0,
+                    const Data& vv = "") :
                     x(xx), y(yy), value(vv)
             {
             }
@@ -348,8 +368,11 @@ namespace mmkv
             virtual bool IsLocked(bool readonly) = 0;
             virtual void* Malloc(size_t size) = 0;
             virtual void Free(void* p) = 0;
-            virtual int GetPOD(DBID db, const Data& key, bool created_if_notexist, uint32_t expected_type, Data& v) = 0;
-            virtual int RegisterPODDestructor(uint32_t expected_type, PODestructor* des) = 0;
+            virtual int GetPOD(DBID db, const Data& key,
+                    bool created_if_notexist, uint32_t expected_type,
+                    Data& v) = 0;
+            virtual int RegisterPODDestructor(uint32_t expected_type,
+                    PODestructor* des) = 0;
             virtual Allocator<char> GetCharAllocator() = 0;
         public:
 
@@ -364,85 +387,120 @@ namespace mmkv
             }
             virtual int Exists(DBID db, const Data& key)= 0;
             virtual int Expire(DBID db, const Data& key, uint32_t secs)= 0;
-            virtual int Keys(DBID db, const std::string& pattern, const StringArrayResult& keys)= 0;
+            virtual int Keys(DBID db, const std::string& pattern,
+                    const StringArrayResult& keys)= 0;
             virtual int Move(DBID db, const Data& key, DBID destdb)= 0;
-            virtual int PExpire(DBID db, const Data& key, uint64_t milliseconds)= 0;
-            virtual int PExpireat(DBID db, const Data& key, uint64_t milliseconds_timestamp)= 0;
+            virtual int PExpire(DBID db, const Data& key,
+                    uint64_t milliseconds)= 0;
+            virtual int PExpireat(DBID db, const Data& key,
+                    uint64_t milliseconds_timestamp)= 0;
             virtual int64_t PTTL(DBID db, const Data& key)= 0;
             virtual int RandomKey(DBID db, std::string& key)= 0;
-            virtual int Rename(DBID db, const Data& key, const Data& new_key)= 0;
-            virtual int RenameNX(DBID db, const Data& key, const Data& new_key)= 0;
-            virtual int64_t Scan(DBID db, int64_t cursor, const std::string& pattern, int32_t limit_count,
+            virtual int Rename(DBID db, const Data& key,
+                    const Data& new_key)= 0;
+            virtual int RenameNX(DBID db, const Data& key,
+                    const Data& new_key)= 0;
+            virtual int64_t Scan(DBID db, int64_t cursor,
+                    const std::string& pattern, int32_t limit_count,
                     const StringArrayResult& result)= 0;
             virtual int64_t TTL(DBID db, const Data& key)= 0;
             virtual int Persist(DBID db, const Data& key)= 0;
             virtual int Type(DBID db, const Data& key)= 0;
-            virtual int Sort(DBID db, const Data& key, const std::string& by, int limit_offset, int limit_count,
-                    const StringArray& get_patterns, bool desc, bool alpha_sort, const Data& destination_key,
+            virtual int Sort(DBID db, const Data& key, const std::string& by,
+                    int limit_offset, int limit_count,
+                    const StringArray& get_patterns, bool desc, bool alpha_sort,
+                    const Data& destination_key,
                     const StringArrayResult& result)= 0;
 
             /*
              * string's operations
              */
             virtual int Append(DBID db, const Data& key, const Data& value)= 0;
-            virtual int BitCount(DBID db, const Data& key, int start = 0, int end = -1)= 0;
-            virtual int BitOP(DBID db, const std::string& op, const Data& dest_key, const DataArray& keys)= 0;
-            virtual int BitPos(DBID db, const Data& key, uint8_t bit, int start = 0, int end = -1)= 0;
+            virtual int BitCount(DBID db, const Data& key, int start = 0,
+                    int end = -1)= 0;
+            virtual int BitOP(DBID db, const std::string& op,
+                    const Data& dest_key, const DataArray& keys)= 0;
+            virtual int BitPos(DBID db, const Data& key, uint8_t bit,
+                    int start = 0, int end = -1)= 0;
             virtual int Decr(DBID db, const Data& key, int64_t& new_val)= 0;
-            virtual int DecrBy(DBID db, const Data& key, int64_t decrement, int64_t& new_val)= 0;
+            virtual int DecrBy(DBID db, const Data& key, int64_t decrement,
+                    int64_t& new_val)= 0;
             virtual int Get(DBID db, const Data& key, std::string& value) = 0;
             virtual int GetBit(DBID db, const Data& key, int offset)= 0;
-            virtual int GetRange(DBID db, const Data& key, int start, int end, std::string& value)= 0;
-            virtual int GetSet(DBID db, const Data& key, const Data& value, std::string& old_value)= 0;
+            virtual int GetRange(DBID db, const Data& key, int start, int end,
+                    std::string& value)= 0;
+            virtual int GetSet(DBID db, const Data& key, const Data& value,
+                    std::string& old_value)= 0;
             virtual int Incr(DBID db, const Data& key, int64_t& new_val)= 0;
-            virtual int IncrBy(DBID db, const Data& key, int64_t increment, int64_t& new_val)= 0;
-            virtual int IncrByFloat(DBID db, const Data& key, long double increment, long double& new_val)= 0;
-            virtual int MGet(DBID db, const DataArray& keys, const StringArrayResult& vals, BooleanArray* get_flag = NULL)= 0;
+            virtual int IncrBy(DBID db, const Data& key, int64_t increment,
+                    int64_t& new_val)= 0;
+            virtual int IncrByFloat(DBID db, const Data& key,
+                    long double increment, long double& new_val)= 0;
+            virtual int MGet(DBID db, const DataArray& keys,
+                    const StringArrayResult& vals,
+                    BooleanArray* get_flag = NULL)= 0;
             virtual int MSet(DBID db, const DataPairArray& key_vals)= 0;
             virtual int MSetNX(DBID db, const DataPairArray& key_vals)= 0;
-            virtual int PSetNX(DBID db, const Data& key, int64_t milliseconds, const Data& value)= 0;
+            virtual int PSetNX(DBID db, const Data& key, int64_t milliseconds,
+                    const Data& value)= 0;
             /*
              * EX seconds -- Set the specified expire time, in seconds.
              * PX milliseconds -- Set the specified expire time, in milliseconds.
              * NX(nx_xx = 0) -- Only set the key if it does not already exist.
              * XX(nx_xx = 1) -- Only set the key if it already exist.
              */
-            virtual int Set(DBID db, const Data& key, const Data& value, int32_t ex = -1, int64_t px = -1,
-                    int8_t nx_xx = -1)= 0;
-            virtual int SetBit(DBID db, const Data& key, int offset, uint8_t value)= 0;
-            virtual int SetEX(DBID db, const Data& key, int32_t secs, const Data& value)= 0;
+            virtual int Set(DBID db, const Data& key, const Data& value,
+                    int32_t ex = -1, int64_t px = -1, int8_t nx_xx = -1)= 0;
+            virtual int SetBit(DBID db, const Data& key, int offset,
+                    uint8_t value)= 0;
+            virtual int SetEX(DBID db, const Data& key, int32_t secs,
+                    const Data& value)= 0;
             virtual int SetNX(DBID db, const Data& key, const Data& value)= 0;
-            virtual int SetRange(DBID db, const Data& key, int offset, const Data& value)= 0;
+            virtual int SetRange(DBID db, const Data& key, int offset,
+                    const Data& value)= 0;
             virtual int Strlen(DBID db, const Data& key)= 0;
 
             /*
              * hash's operations
              */
-            virtual int HDel(DBID db, const Data& key, const DataArray& fields)= 0;
+            virtual int HDel(DBID db, const Data& key,
+                    const DataArray& fields)= 0;
             inline int HDel(DBID db, const Data& key, const Data& field)
             {
                 return HDel(db, key, DataArray(1, field));
             }
             virtual int HExists(DBID db, const Data& key, const Data& field)= 0;
-            virtual int HGet(DBID db, const Data& key, const Data& field, std::string& val)= 0;
-            virtual int HGetAll(DBID db, const Data& key, const StringArrayResult& vals)= 0;
-            virtual int HIncrBy(DBID db, const Data& key, const Data& field, int64_t increment, int64_t& new_val)= 0;
-            virtual int HIncrByFloat(DBID db, const Data& key, const Data& field, long double increment,
+            virtual int HGet(DBID db, const Data& key, const Data& field,
+                    std::string& val)= 0;
+            virtual int HGetAll(DBID db, const Data& key,
+                    const StringArrayResult& vals)= 0;
+            virtual int HIncrBy(DBID db, const Data& key, const Data& field,
+                    int64_t increment, int64_t& new_val)= 0;
+            virtual int HIncrByFloat(DBID db, const Data& key,
+                    const Data& field, long double increment,
                     long double& new_val)= 0;
-            virtual int HKeys(DBID db, const Data& key, const StringArrayResult& fields)= 0;
+            virtual int HKeys(DBID db, const Data& key,
+                    const StringArrayResult& fields)= 0;
             virtual int HLen(DBID db, const Data& key)= 0;
-            virtual int HMGet(DBID db, const Data& key, const DataArray& fields, const StringArrayResult& vals, BooleanArray* get_flag = NULL)= 0;
-            virtual int HMSet(DBID db, const Data& key, const DataPairArray& field_vals)= 0;
-            virtual int64_t HScan(DBID db, const Data& key, int64_t cursor, const std::string& pattern,
-                    int32_t limit_count, const StringArrayResult& results)= 0;
-            virtual int HSet(DBID db, const Data& key, const Data& field, const Data& val, bool nx = false)= 0;
+            virtual int HMGet(DBID db, const Data& key, const DataArray& fields,
+                    const StringArrayResult& vals,
+                    BooleanArray* get_flag = NULL)= 0;
+            virtual int HMSet(DBID db, const Data& key,
+                    const DataPairArray& field_vals)= 0;
+            virtual int64_t HScan(DBID db, const Data& key, int64_t cursor,
+                    const std::string& pattern, int32_t limit_count,
+                    const StringArrayResult& results)= 0;
+            virtual int HSet(DBID db, const Data& key, const Data& field,
+                    const Data& val, bool nx = false)= 0;
             virtual int HStrlen(DBID db, const Data& key, const Data& field)= 0;
-            virtual int HVals(DBID db, const Data& key, const StringArrayResult& vals)= 0;
+            virtual int HVals(DBID db, const Data& key,
+                    const StringArrayResult& vals)= 0;
 
             /*
              * hyperloglog's operations
              */
-            virtual int PFAdd(DBID db, const Data& key, const DataArray& elements)= 0;
+            virtual int PFAdd(DBID db, const Data& key,
+                    const DataArray& elements)= 0;
             inline int PFAdd(DBID db, const Data& key, const Data& element)
             {
                 return PFAdd(db, key, DataArray(1, element));
@@ -452,28 +510,39 @@ namespace mmkv
             {
                 return PFCount(db, DataArray(1, key));
             }
-            virtual int PFMerge(DBID db, const Data& destkey, const DataArray& sourcekeys)= 0;
+            virtual int PFMerge(DBID db, const Data& destkey,
+                    const DataArray& sourcekeys)= 0;
 
             /*
              * list's operations
              */
-            virtual int LIndex(DBID db, const Data& key, int index, std::string& val)= 0;
-            virtual int LInsert(DBID db, const Data& key, bool before_ot_after, const Data& pivot, const Data& val)= 0;
+            virtual int LIndex(DBID db, const Data& key, int index,
+                    std::string& val)= 0;
+            virtual int LInsert(DBID db, const Data& key, bool before_ot_after,
+                    const Data& pivot, const Data& val)= 0;
             virtual int LLen(DBID db, const Data& key)= 0;
             virtual int LPop(DBID db, const Data& key, std::string& val)= 0;
-            virtual int LPush(DBID db, const Data& key, const DataArray& vals, bool nx = false)= 0;
-            inline int LPush(DBID db, const Data& key, const Data& val, bool nx = false)
+            virtual int LPush(DBID db, const Data& key, const DataArray& vals,
+                    bool nx = false)= 0;
+            inline int LPush(DBID db, const Data& key, const Data& val,
+                    bool nx = false)
             {
                 return LPush(db, key, DataArray(1, val), nx);
             }
-            virtual int LRange(DBID db, const Data& key, int start, int stop, const StringArrayResult& vals)= 0;
-            virtual int LRem(DBID db, const Data& key, int count, const Data& val)= 0;
-            virtual int LSet(DBID db, const Data& key, int index, const Data& val)= 0;
+            virtual int LRange(DBID db, const Data& key, int start, int stop,
+                    const StringArrayResult& vals)= 0;
+            virtual int LRem(DBID db, const Data& key, int count,
+                    const Data& val)= 0;
+            virtual int LSet(DBID db, const Data& key, int index,
+                    const Data& val)= 0;
             virtual int LTrim(DBID db, const Data& key, int start, int stop)= 0;
             virtual int RPop(DBID db, const Data& key, std::string& val)= 0;
-            virtual int RPopLPush(DBID db, const Data& source, const Data& destination, std::string& pop_value)= 0;
-            virtual int RPush(DBID db, const Data& key, const DataArray& vals, bool nx = false)= 0;
-            inline int RPush(DBID db, const Data& key, const Data& val, bool nx = false)
+            virtual int RPopLPush(DBID db, const Data& source,
+                    const Data& destination, std::string& pop_value)= 0;
+            virtual int RPush(DBID db, const Data& key, const DataArray& vals,
+                    bool nx = false)= 0;
+            inline int RPush(DBID db, const Data& key, const Data& val,
+                    bool nx = false)
             {
                 return RPush(db, key, DataArray(1, val), nx);
             }
@@ -481,38 +550,54 @@ namespace mmkv
             /*
              * set's operations
              */
-            virtual int SAdd(DBID db, const Data& key, const DataArray& elements)= 0;
+            virtual int SAdd(DBID db, const Data& key,
+                    const DataArray& elements)= 0;
             inline int SAdd(DBID db, const Data& key, const Data& val)
             {
                 return SAdd(db, key, DataArray(1, val));
             }
             virtual int SCard(DBID db, const Data& key)= 0;
-            virtual int SDiff(DBID db, const DataArray& keys, const StringArrayResult& diffs)= 0;
-            virtual int SDiffStore(DBID db, const Data& destination, const DataArray& keys)= 0;
-            virtual int SInter(DBID db, const DataArray& keys, const StringArrayResult& inters)= 0;
-            virtual int SInterStore(DBID db, const Data& destination, const DataArray& keys)= 0;
-            virtual int SIsMember(DBID db, const Data& key, const Data& member)= 0;
-            virtual int SMembers(DBID db, const Data& key, const StringArrayResult& members)= 0;
-            virtual int SMove(DBID db, const Data& source, const Data& destination, const Data& member)= 0;
-            virtual int SPop(DBID db, const Data& key, const StringArrayResult& members, int count = 1)= 0;
-            virtual int SRandMember(DBID db, const Data& key, const StringArrayResult& members, int count = 1)= 0;
-            virtual int SRem(DBID db, const Data& key, const DataArray& elements)= 0;
+            virtual int SDiff(DBID db, const DataArray& keys,
+                    const StringArrayResult& diffs)= 0;
+            virtual int SDiffStore(DBID db, const Data& destination,
+                    const DataArray& keys)= 0;
+            virtual int SInter(DBID db, const DataArray& keys,
+                    const StringArrayResult& inters)= 0;
+            virtual int SInterStore(DBID db, const Data& destination,
+                    const DataArray& keys)= 0;
+            virtual int SIsMember(DBID db, const Data& key,
+                    const Data& member)= 0;
+            virtual int SMembers(DBID db, const Data& key,
+                    const StringArrayResult& members)= 0;
+            virtual int SMove(DBID db, const Data& source,
+                    const Data& destination, const Data& member)= 0;
+            virtual int SPop(DBID db, const Data& key,
+                    const StringArrayResult& members, int count = 1)= 0;
+            virtual int SRandMember(DBID db, const Data& key,
+                    const StringArrayResult& members, int count = 1)= 0;
+            virtual int SRem(DBID db, const Data& key,
+                    const DataArray& elements)= 0;
             virtual int SRem(DBID db, const Data& key, const Data& member)
             {
                 return SRem(db, key, DataArray(1, member));
             }
-            virtual int64_t SScan(DBID db, const Data& key, int64_t cursor, const std::string& pattern,
-                    int32_t limit_count, const StringArrayResult& results)= 0;
-            virtual int SUnion(DBID db, const DataArray& keys, const StringArrayResult& unions)= 0;
-            virtual int SUnionStore(DBID db, const Data& destination, const DataArray& keys)= 0;
+            virtual int64_t SScan(DBID db, const Data& key, int64_t cursor,
+                    const std::string& pattern, int32_t limit_count,
+                    const StringArrayResult& results)= 0;
+            virtual int SUnion(DBID db, const DataArray& keys,
+                    const StringArrayResult& unions)= 0;
+            virtual int SUnionStore(DBID db, const Data& destination,
+                    const DataArray& keys)= 0;
 
             /*
              * zset's operations
              */
-            virtual int ZAdd(DBID db, const Data& key, const ScoreDataArray& vals, bool nx = false, bool xx = false,
-                    bool ch = false, bool incr = false)= 0;
-            inline int ZAdd(DBID db, const Data& key, long double score, const Data& val, bool nx = false, bool xx =
-                    false, bool ch = false, bool incr = false)
+            virtual int ZAdd(DBID db, const Data& key,
+                    const ScoreDataArray& vals, bool nx = false,
+                    bool xx = false, bool ch = false, bool incr = false)= 0;
+            inline int ZAdd(DBID db, const Data& key, long double score,
+                    const Data& val, bool nx = false, bool xx = false, bool ch =
+                            false, bool incr = false)
             {
                 ScoreData sd;
                 sd.score = score;
@@ -520,48 +605,69 @@ namespace mmkv
                 return ZAdd(db, key, ScoreDataArray(1, sd), nx, xx, ch, incr);
             }
             virtual int ZCard(DBID db, const Data& key)= 0;
-            virtual int ZCount(DBID db, const Data& key, const std::string& min, const std::string& max)= 0;
-            virtual int ZIncrBy(DBID db, const Data& key, long double increment, const Data& member,
-                    long double& new_score)= 0;
-            virtual int ZLexCount(DBID db, const Data& key, const std::string& min, const std::string& max)= 0;
-            virtual int ZRange(DBID db, const Data& key, int start, int stop, bool with_scores,
+            virtual int ZCount(DBID db, const Data& key, const std::string& min,
+                    const std::string& max)= 0;
+            virtual int ZIncrBy(DBID db, const Data& key, long double increment,
+                    const Data& member, long double& new_score)= 0;
+            virtual int ZLexCount(DBID db, const Data& key,
+                    const std::string& min, const std::string& max)= 0;
+            virtual int ZRange(DBID db, const Data& key, int start, int stop,
+                    bool with_scores, const StringArrayResult& vals)= 0;
+            virtual int ZRangeByLex(DBID db, const Data& key,
+                    const std::string& min, const std::string& max,
+                    int limit_offset, int limit_count,
                     const StringArrayResult& vals)= 0;
-            virtual int ZRangeByLex(DBID db, const Data& key, const std::string& min, const std::string& max,
-                    int limit_offset, int limit_count, const StringArrayResult& vals)= 0;
-            virtual int ZRangeByScore(DBID db, const Data& key, const std::string& min, const std::string& max,
-                    bool with_scores, int limit_offset, int limit_count, const StringArrayResult& vals)= 0;
+            virtual int ZRangeByScore(DBID db, const Data& key,
+                    const std::string& min, const std::string& max,
+                    bool with_scores, int limit_offset, int limit_count,
+                    const StringArrayResult& vals)= 0;
             virtual int ZRank(DBID db, const Data& key, const Data& member)= 0;
-            virtual int ZRem(DBID db, const Data& key, const DataArray& members)= 0;
+            virtual int ZRem(DBID db, const Data& key,
+                    const DataArray& members)= 0;
             inline int ZRem(DBID db, const Data& key, const Data& val)
             {
                 return ZRem(db, key, DataArray(1, val));
             }
-            virtual int ZRemRangeByLex(DBID db, const Data& key, const std::string& min, const std::string& max)= 0;
-            virtual int ZRemRangeByRank(DBID db, const Data& key, int start, int stop)= 0;
-            virtual int ZRemRangeByScore(DBID db, const Data& key, const std::string& min, const std::string& max)= 0;
-            virtual int ZRevRange(DBID db, const Data& key, int start, int stop, bool with_scores,
+            virtual int ZRemRangeByLex(DBID db, const Data& key,
+                    const std::string& min, const std::string& max)= 0;
+            virtual int ZRemRangeByRank(DBID db, const Data& key, int start,
+                    int stop)= 0;
+            virtual int ZRemRangeByScore(DBID db, const Data& key,
+                    const std::string& min, const std::string& max)= 0;
+            virtual int ZRevRange(DBID db, const Data& key, int start, int stop,
+                    bool with_scores, const StringArrayResult& vals)= 0;
+            virtual int ZRevRangeByLex(DBID db, const Data& key,
+                    const std::string& max, const std::string& min,
+                    int limit_offset, int limit_count,
                     const StringArrayResult& vals)= 0;
-            virtual int ZRevRangeByLex(DBID db, const Data& key, const std::string& max, const std::string& min,
-                    int limit_offset, int limit_count, const StringArrayResult& vals)= 0;
-            virtual int ZRevRangeByScore(DBID db, const Data& key, const std::string& max, const std::string& min,
-                    bool with_scores, int limit_offset, int limit_count, const StringArrayResult& vals)= 0;
-            virtual int ZRevRank(DBID db, const Data& key, const Data& member)= 0;
-            virtual int ZScore(DBID db, const Data& key, const Data& member, long double& score)= 0;
-            virtual int64_t ZScan(DBID db, const Data& key, int64_t cursor, const std::string& pattern,
-                    int32_t limit_count, const StringArrayResult& results)= 0;
-            virtual int ZInterStore(DBID db, const Data& destination, const DataArray& keys, const WeightArray& weights,
+            virtual int ZRevRangeByScore(DBID db, const Data& key,
+                    const std::string& max, const std::string& min,
+                    bool with_scores, int limit_offset, int limit_count,
+                    const StringArrayResult& vals)= 0;
+            virtual int ZRevRank(DBID db, const Data& key,
+                    const Data& member)= 0;
+            virtual int ZScore(DBID db, const Data& key, const Data& member,
+                    long double& score)= 0;
+            virtual int64_t ZScan(DBID db, const Data& key, int64_t cursor,
+                    const std::string& pattern, int32_t limit_count,
+                    const StringArrayResult& results)= 0;
+            virtual int ZInterStore(DBID db, const Data& destination,
+                    const DataArray& keys, const WeightArray& weights,
                     const std::string& aggregate)= 0;
-            virtual int ZUnionStore(DBID db, const Data& destination, const DataArray& keys, const WeightArray& weights,
+            virtual int ZUnionStore(DBID db, const Data& destination,
+                    const DataArray& keys, const WeightArray& weights,
                     const std::string& aggregate)= 0;
 
-            virtual int GeoAdd(DBID db, const Data& key, const Data& coord_type, const GeoPointArray& points)= 0;
-            virtual int GeoAdd(DBID db, const Data& key, const Data& coord_type, long double x, long double y,
-                    const Data& point)
+            virtual int GeoAdd(DBID db, const Data& key, const Data& coord_type,
+                    const GeoPointArray& points)= 0;
+            virtual int GeoAdd(DBID db, const Data& key, const Data& coord_type,
+                    long double x, long double y, const Data& point)
             {
                 GeoPoint p(x, y, point);
                 return GeoAdd(db, key, coord_type, GeoPointArray(1, p));
             }
-            virtual int GeoSearch(DBID db, const Data& key, const GeoSearchOptions& options,
+            virtual int GeoSearch(DBID db, const Data& key,
+                    const GeoSearchOptions& options,
                     const StringArrayResult& results)= 0;
 
             /*
@@ -571,7 +677,7 @@ namespace mmkv
             virtual int FlushDB(DBID db) = 0;
             virtual int FlushAll() = 0;
 
-            virtual int GetAllDBID(DBIDArray& ids) = 0;
+            virtual int GetAllDBInfo(DBInfoArray& dbs) = 0;
 
             template<typename T>
             PODProxy<T> NewPOD()
@@ -607,12 +713,14 @@ namespace mmkv
             template<typename T>
             int RegisterPODType(uint32_t expected_type)
             {
-                return RegisterPODDestructor(expected_type, PODDestructorTemplate<T>::Destruct);
+                return RegisterPODDestructor(expected_type,
+                        PODDestructorTemplate<T>::Destruct);
             }
 
             template<typename T>
-            PODProxy<T> GetPOD(DBID db, const Data& key, bool readonly, bool created_if_notexist,
-                    uint32_t expected_type, LockedPOD<T>& value, int& err)
+            PODProxy<T> GetPOD(DBID db, const Data& key, bool readonly,
+                    bool created_if_notexist, uint32_t expected_type,
+                    LockedPOD<T>& value, int& err)
             {
                 err = 0;
                 Data v;
@@ -627,7 +735,8 @@ namespace mmkv
                 {
                     RegisterPODType<T>(expected_type);
                 }
-                int ret = GetPOD(db, key, created_if_notexist, expected_type, v);
+                int ret = GetPOD(db, key, created_if_notexist, expected_type,
+                        v);
                 if (ret < 0)
                 {
                     Unlock(readonly);
@@ -648,8 +757,7 @@ namespace mmkv
                 return proxy;
             }
 
-            virtual size_t KeySpaceUsed() = 0;
-            virtual size_t ValueSpaceUsed() = 0;
+            virtual size_t MSpaceUsed() = 0;
 
             template<typename T>
             Allocator<T> GetAllocator()
@@ -659,7 +767,11 @@ namespace mmkv
 
             virtual void Unlock(bool readonly) = 0;
 
-            virtual int RemoveExpiredKeys() = 0;
+            /*
+             * 1. incremental rehash
+             * 2. remove expired keys
+             */
+            virtual int Routine() = 0;
 
             virtual int Backup(const std::string& dest_file) = 0;
             virtual int Restore(const std::string& from_file) = 0;

@@ -312,7 +312,7 @@ namespace mmkv
             this->Del(db, DataArray(1, destination_key));
             RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
             EnsureWritableValueSpace();
-            ObjectAllocator alloc = m_segment.ValueAllocator<Object>();
+            ObjectAllocator alloc = m_segment.MSpaceAllocator<Object>();
             int err;
             StringList* list = GetObject<StringList>(db, destination_key, V_TYPE_LIST, true, err)(alloc);
             if (0 != err)
@@ -323,7 +323,7 @@ namespace mmkv
             while (it != store_list.end())
             {
                 Object obj;
-                m_segment.AssignObjectValue(obj, *it, false);
+                m_segment.AssignObjectValue(obj, *it, true);
                 list->push_back(obj);
                 it++;
             }

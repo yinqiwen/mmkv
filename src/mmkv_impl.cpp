@@ -52,7 +52,7 @@ namespace mmkv
     }
     void* MMKVImpl::Malloc(size_t size)
     {
-        return m_segment.Allocate(size, false);
+        return m_segment.Allocate(size);
     }
     void MMKVImpl::Free(void* p)
     {
@@ -71,17 +71,14 @@ namespace mmkv
         return m_segment.IsLocked(readonly);
     }
 
-    size_t MMKVImpl::KeySpaceUsed()
+    size_t MMKVImpl::MSpaceUsed()
     {
-        return m_segment.KeySpaceUsed();
+        return m_segment.MSpaceUsed();
     }
-    size_t MMKVImpl::ValueSpaceUsed()
-    {
-        return m_segment.ValueSpaceUsed();
-    }
+
     Allocator<char> MMKVImpl::GetCharAllocator()
     {
-        return m_segment.ValueAllocator<char>();
+        return m_segment.MSpaceAllocator<char>();
     }
 
     int MMKVImpl::DeleteMMKVTable(DBID db)
@@ -118,9 +115,11 @@ namespace mmkv
         sprintf(name, "%s_%u", kTableConstName, db);
         if (create_if_notexist && !m_readonly)
         {
-            ObjectMapAllocator allocator(m_segment.GetKeySpaceAllocator());
+            ObjectMapAllocator allocator(m_segment.GetMSpaceAllocator());
             bool created = false;
-            kv = m_segment.FindOrConstructObject<MMKVTable>(name, &created)(std::less<Object>(), allocator);
+            //kv = m_segment.FindOrConstructObject<MMKVTable>(name, &created)(std::less<Object>(), allocator);
+            kv = m_segment.FindOrConstructObject<MMKVTable>(name, &created)(
+                    allocator);
 //            kv = m_segment.FindOrConstructObject<MMKVTable>(name, &created)(0, ObjectHash(), ObjectEqual(), allocator);
             if (created)
             {
@@ -163,10 +162,12 @@ namespace mmkv
             m_dbid_set = NULL;
             m_kvs.clear();
 
-            Allocator<char> allocator = m_segment.GetKeySpaceAllocator();
+            Allocator<char> allocator = m_segment.GetMSpaceAllocator();
             WriteLockGuard<MemorySegmentManager> keylock_guard(m_segment, lock);
-            m_expires = m_segment.FindOrConstructObject<ExpireInfoSetArray>(kExpiresConstName)(allocator);
-            m_dbid_set = m_segment.FindOrConstructObject<DBIDSet>(kDBIDSetName)(std::less<DBID>(), allocator);
+            m_expires = m_segment.FindOrConstructObject<ExpireInfoSetArray>(
+                    kExpiresConstName)(allocator);
+            m_dbid_set = m_segment.FindOrConstructObject<DBIDSet>(kDBIDSetName)(
+                    std::less<DBID>(), allocator);
         }
         else
         {
@@ -210,9 +211,9 @@ namespace mmkv
         ExpireInfoSet* expire = m_expires->at(db).get();
         if (NULL == expire && create_ifnotexist)
         {
-            Allocator<char> allocator = m_segment.GetKeySpaceAllocator();
-            expire = m_segment.NewObject<ExpireInfoSet>(true)(allocator);
-            (*m_expires)[db] =  expire;
+            Allocator<char> allocator = m_segment.GetMSpaceAllocator();
+            expire = m_segment.NewObject<ExpireInfoSet>()(allocator);
+            (*m_expires)[db] = expire;
         }
         return expire;
     }
@@ -261,12 +262,9 @@ namespace mmkv
             o.Clear();
         }
     }
-    void MMKVImpl::AssignObjectContent(const Object& obj, const Data& data, bool in_keyspace)
-    {
-        m_segment.AssignObjectValue(const_cast<Object&>(obj), data, in_keyspace);
-    }
 
-    int MMKVImpl::GetPOD(DBID db, const Data& key, bool created_if_notexist, uint32_t expected_type, Data& v)
+    int MMKVImpl::GetPOD(DBID db, const Data& key, bool created_if_notexist,
+            uint32_t expected_type, Data& v)
     {
         if (m_readonly && created_if_notexist)
         {
@@ -281,13 +279,16 @@ namespace mmkv
         Object* value_data = NULL;
         if (created_if_notexist)
         {
-            std::pair<MMKVTable::iterator, bool> ret = kv->insert(MMKVTable::value_type(tmpkey, Object()));
+            std::pair<MMKVTable::iterator, bool> ret = kv->insert(
+                    MMKVTable::value_type(tmpkey, Object()));
             value_data = &(ret.first->second);
             if (ret.second)
             {
                 value_data->type = V_TYPE_POD;
-                m_segment.ObjectMakeRoom(*value_data, sizeof(PODHeader) + v.len);
-                PODHeader* pod_header = (PODHeader*) (value_data->WritableData());
+                m_segment.ObjectMakeRoom(*value_data,
+                        sizeof(PODHeader) + v.len);
+                PODHeader* pod_header =
+                        (PODHeader*) (value_data->WritableData());
                 pod_header->type = expected_type;
                 v.data = value_data->RawValue() + sizeof(PODHeader);
                 return 1;
@@ -302,15 +303,15 @@ namespace mmkv
             }
             value_data = &(found->second);
         }
-        if (IsExpired(db, key, *value_data))
-        {
-            if (!created_if_notexist)
-            {
-                return ERR_ENTRY_NOT_EXIST;
-            }
-            ClearTTL(0, tmpkey, *value_data);
-            m_segment.ObjectMakeRoom(*value_data, sizeof(PODHeader) + v.len);
-        }
+//        if (IsExpired(db, key, *value_data))
+//        {
+//            if (!created_if_notexist)
+//            {
+//                return ERR_ENTRY_NOT_EXIST;
+//            }
+//            ClearTTL(0, tmpkey, *value_data);
+//            m_segment.ObjectMakeRoom(*value_data, sizeof(PODHeader) + v.len);
+//        }
         PODHeader* pod_header = (PODHeader*) (value_data->WritableData());
         if (pod_header->type != expected_type)
         {
@@ -324,10 +325,12 @@ namespace mmkv
         return 0;
     }
 
-    int MMKVImpl::RegisterPODDestructor(uint32_t expected_type, PODestructor* des)
+    int MMKVImpl::RegisterPODDestructor(uint32_t expected_type,
+            PODestructor* des)
     {
         LockGuard<SpinMutexLock> keylock_guard(m_kv_table_lock);
-        if (!m_destructors.insert(PODestructorTable::value_type(expected_type, des)).second)
+        if (!m_destructors.insert(
+                PODestructorTable::value_type(expected_type, des)).second)
         {
             return ERR_DUPLICATE_POD_TYPE;
         }
@@ -354,18 +357,19 @@ namespace mmkv
         return ttl <= get_current_micros();
     }
 
-    Object MMKVImpl::CloneStrObject(const Object& obj, bool in_keyspace)
+    Object MMKVImpl::CloneStrObject(const Object& obj)
     {
         Object clone(obj);
         if (clone.IsOffsetPtr())
         {
             Data data(obj.RawValue(), obj.len);
-            AssignObjectContent(clone, data, in_keyspace);
+            m_segment.AssignObjectValue(clone, data, false);
         }
         return clone;
     }
 
-    void MMKVImpl::SetTTL(DBID db, const Object& key, Object& value, uint64_t ttl)
+    void MMKVImpl::SetTTL(DBID db, const Object& key, Object& value,
+            uint64_t ttl)
     {
         if (ttl == 0)
         {
@@ -377,7 +381,8 @@ namespace mmkv
         entry.key.key = key;
         value.hasttl = 1;
         ExpireInfoSet* expire = GetDBExpireInfo(db, true);
-        std::pair<TTLValueTable::iterator, bool> sit = expire->map.insert(TTLValueTable::value_type(entry.key, ttl));
+        std::pair<TTLValueTable::iterator, bool> sit = expire->map.insert(
+                TTLValueTable::value_type(entry.key, ttl));
         if (!sit.second)
         {
             entry.expireat = sit.first->second;
@@ -420,11 +425,8 @@ namespace mmkv
                 StringHashTable::iterator it = m->begin();
                 while (it != m->end())
                 {
-                    //if (it.isfilled())
-                    {
-                        DestroyObjectContent(it->first);
-                        DestroyObjectContent(it->second);
-                    }
+                    DestroyObjectContent(it->first);
+                    DestroyObjectContent(it->second);
                     it++;
                 }
                 destroy_value(m_segment, m);
@@ -479,7 +481,8 @@ namespace mmkv
                 PODestructor* des = GetPODDestructor(pod_header->type);
                 if (NULL == des)
                 {
-                    WARN_LOG("Bo desturctor found for POD type:%u", pod_header->type);
+                    WARN_LOG("Bo desturctor found for POD type:%u",
+                            pod_header->type);
                     return ERR_NO_DESTRUCTOR;
                 }
                 (*des)(obj);
@@ -506,7 +509,8 @@ namespace mmkv
         }
         else
         {
-            ERROR_LOG("Destroy value failed with err:%d for type:%u", err, v.type);
+            ERROR_LOG("Destroy value failed with err:%d for type:%u", err,
+                    v.type);
         }
         return err;
     }
@@ -522,7 +526,7 @@ namespace mmkv
             {
                 return err;
             }
-            Object key_obj =  found->first;
+            Object key_obj = found->first;
             table->erase(found);
             DestroyObjectContent(key_obj);
             return 1;
@@ -530,10 +534,12 @@ namespace mmkv
         return 0;
     }
 
-    int MMKVImpl::GenericInsertValue(MMKVTable* table, const Data& key, Object& v, bool replace)
+    int MMKVImpl::GenericInsertValue(MMKVTable* table, const Data& key,
+            Object& v, bool replace)
     {
         Object tmpkey(key, false);
-        std::pair<MMKVTable::iterator, bool> ret = table->insert(MMKVTable::value_type(tmpkey, v));
+        std::pair<MMKVTable::iterator, bool> ret = table->insert(
+                MMKVTable::value_type(tmpkey, v));
         if (!ret.second)
         {
             Object& old_data = ret.first->second;
@@ -546,7 +552,8 @@ namespace mmkv
         }
         else
         {
-            m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first), key, false);
+            m_segment.AssignObjectValue(const_cast<Object&>(ret.first->first),
+                    key, false);
         }
         return 1;
     }
@@ -593,10 +600,10 @@ namespace mmkv
         {
             return ERR_ENTRY_NOT_EXIST;
         }
-        if (IsExpired(db, key, *value_data))
-        {
-            return ERR_ENTRY_NOT_EXIST;
-        }
+//        if (IsExpired(db, key, *value_data))
+//        {
+//            return ERR_ENTRY_NOT_EXIST;
+//        }
         return value_data->type;
     }
 
@@ -654,21 +661,24 @@ namespace mmkv
         {
             return -2;
         }
-        if(value_data->hasttl)
+        if (value_data->hasttl)
         {
-            return (GetTTL(db, Object(key, false), *value_data) - get_current_micros()) / 1000;
+            return (GetTTL(db, Object(key, false), *value_data)
+                    - get_current_micros()) / 1000;
         }
         return -1;
     }
     int MMKVImpl::Expire(DBID db, const Data& key, uint32_t secs)
     {
-        return PExpireat(db, key, (uint64_t) (secs * 1000) + get_current_micros() / 1000);
+        return PExpireat(db, key,
+                (uint64_t) (secs * 1000) + get_current_micros() / 1000);
     }
     int MMKVImpl::PExpire(DBID db, const Data& key, uint64_t milliseconds)
     {
         return PExpireat(db, key, milliseconds + get_current_micros() / 1000);
     }
-    int MMKVImpl::PExpireat(DBID db, const Data& key, uint64_t milliseconds_timestamp)
+    int MMKVImpl::PExpireat(DBID db, const Data& key,
+            uint64_t milliseconds_timestamp)
     {
         if (m_readonly)
         {
@@ -691,7 +701,8 @@ namespace mmkv
         return 1;
     }
 
-    int MMKVImpl::GenericMoveKey(DBID src_db, const Data& src_key, DBID dest_db, const Data& dest_key, bool nx)
+    int MMKVImpl::GenericMoveKey(DBID src_db, const Data& src_key, DBID dest_db,
+            const Data& dest_key, bool nx)
     {
         if (m_readonly)
         {
@@ -717,7 +728,8 @@ namespace mmkv
         }
 
         Object tmpkey2(dest_key, false);
-        std::pair<MMKVTable::iterator, bool> ret = dst_kv->insert(MMKVTable::value_type(tmpkey2, found->second));
+        std::pair<MMKVTable::iterator, bool> ret = dst_kv->insert(
+                MMKVTable::value_type(tmpkey2, found->second));
         const Object& kk = ret.first->first;
         if (ret.second)
         {
@@ -728,7 +740,8 @@ namespace mmkv
             }
             else
             {
-                m_segment.AssignObjectValue(const_cast<Object&>(kk), dest_key, true);
+                m_segment.AssignObjectValue(const_cast<Object&>(kk), dest_key,
+                        false);
             }
             return 1;
         }
@@ -768,8 +781,9 @@ namespace mmkv
         int loop_count = 0;
         while (true)
         {
-            MMKVTable::iterator it = kv->begin();
-            it.increment_by(random_between_int32(0, INT_MAX) % kv->size());
+            MMKVTable::iterator it = kv->get_iterator(
+                    random_between_int32(0, INT_MAX) % kv->bucket_count());
+            //it.increment_by(random_between_int32(0, INT_MAX) % kv->size());
             //it.advance(random_between_int32(0, INT_MAX) % kv->bucket_count());
             if (it != kv->end())
             {
@@ -790,7 +804,8 @@ namespace mmkv
         }
         return 0;
     }
-    int MMKVImpl::Keys(DBID db, const std::string& pattern, const StringArrayResult& keys)
+    int MMKVImpl::Keys(DBID db, const std::string& pattern,
+            const StringArrayResult& keys)
     {
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         MMKVTable* kv = GetMMKVTable(db, false);
@@ -804,7 +819,8 @@ namespace mmkv
             std::string key_str;
             it->first.ToString(key_str);
             if (pattern == "*"
-                    || stringmatchlen(pattern.c_str(), pattern.size(), key_str.data(), key_str.size(), 0) == 1)
+                    || stringmatchlen(pattern.c_str(), pattern.size(),
+                            key_str.data(), key_str.size(), 0) == 1)
             {
                 std::string& ss = keys.Get();
                 ss = key_str;
@@ -814,8 +830,8 @@ namespace mmkv
         return 0;
     }
 
-    int64_t MMKVImpl::Scan(DBID db, int64_t cursor, const std::string& pattern, int32_t limit_count,
-            const StringArrayResult& result)
+    int64_t MMKVImpl::Scan(DBID db, int64_t cursor, const std::string& pattern,
+            int32_t limit_count, const StringArrayResult& result)
     {
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         MMKVTable* kv = GetMMKVTable(db, false);
@@ -824,15 +840,16 @@ namespace mmkv
             return 0;
         }
         int match_count = 0;
-        int pos = cursor >= kv->size() ? kv->size() : cursor;
-        MMKVTable::iterator it = kv->begin();
-        it.increment_by(pos);
+        size_t pos = cursor >= kv->bucket_count() ? kv->bucket_count() : cursor;
+        MMKVTable::iterator it = kv->get_iterator(pos);
+        //it.increment_by(pos);
         while (it != kv->end())
         {
             std::string key_str;
             it->first.ToString(key_str);
             if (pattern == ""
-                    || stringmatchlen(pattern.c_str(), pattern.size(), key_str.c_str(), key_str.size(), 0) == 1)
+                    || stringmatchlen(pattern.c_str(), pattern.size(),
+                            key_str.c_str(), key_str.size(), 0) == 1)
             {
                 std::string& ss = result.Get();
                 ss = key_str;
@@ -842,10 +859,9 @@ namespace mmkv
                     break;
                 }
             }
-            pos++;
             it++;
         }
-        return it == kv->end() ? 0 : pos;
+        return it == kv->end() ? 0 : it.position();
     }
 
     int64_t MMKVImpl::DBSize(DBID db)
@@ -883,10 +899,10 @@ namespace mmkv
 
         //clear expire info for db
         ExpireInfoSet* expire = GetDBExpireInfo(db, false);
-        if(NULL != expire)
+        if (NULL != expire)
         {
             m_segment.DestroyObject<ExpireInfoSet>(expire);
-            (*m_expires)[db] =  NULL;
+            (*m_expires)[db] = NULL;
         }
         return 0;
     }
@@ -902,13 +918,62 @@ namespace mmkv
         return 0;
     }
 
+    int MMKVImpl::Routine()
+    {
+        if (m_readonly)
+        {
+            return ERR_PERMISSION_DENIED;
+        }
+        if (IncrementalRehash() < 0)
+        {
+            return -1;
+        }
+        if (RemoveExpiredKeys() < 0)
+        {
+            return -1;
+        }
+        return 0;
+    }
+
+#define ROUTINE_CB()  do{ \
+    if(NULL != m_options.routine_cb){\
+        int ret = (*m_options.routine_cb)();\
+        if(ret < 0) return ret;\
+    }\
+}while(0)
+
+    int MMKVImpl::IncrementalRehash()
+    {
+        if (m_readonly)
+        {
+            return ERR_PERMISSION_DENIED;
+        }
+        RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
+        DBIDSet::iterator it = m_dbid_set->begin();
+        while (it != m_dbid_set->end())
+        {
+            MMKVTable* table = GetMMKVTable(*it, false);
+            if (NULL != table)
+            {
+                table->try_shrink();
+                while (table->rehashing())
+                {
+                    table->incremental_rehash(100);
+                    ROUTINE_CB();
+                }
+            }
+            ROUTINE_CB();
+            it++;
+        }
+        return 0;
+    }
+
     int MMKVImpl::RemoveExpiredKeys()
     {
         if (m_readonly)
         {
             return ERR_PERMISSION_DENIED;
         }
-        int removed = 0;
         uint64_t start = get_current_micros();
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         for (size_t i = 0; i < m_expires->size(); i++)
@@ -921,9 +986,10 @@ namespace mmkv
             MMKVTable* kv = GetMMKVTable(i, false);
             if (NULL == kv)
             {
-                if(!expire->set.empty())
+                if (!expire->set.empty())
                 {
-                    ERROR_LOG("db:%u is empty while expire table is not empty.", i);
+                    ERROR_LOG("db:%u is empty while expire table is not empty.",
+                            i);
                 }
                 continue;
             }
@@ -934,29 +1000,24 @@ namespace mmkv
                 {
                     break;
                 }
-                bool break_expire_check = false;
-                if(m_options.expire_cb != NULL)
+                if (m_options.expire_cb != NULL)
                 {
                     std::string keystr;
                     it->key.key.ToString(keystr);
-                    if(-1 == (*m_options.expire_cb)(it->key.db, keystr))
-                    {
-                        break_expire_check = true;
-                    }
+                    (*m_options.expire_cb)(it->key.db, keystr);
                 }
+
                 int err = GenericDel(kv, it->key.db, it->key.key);
                 if (err <= 0)
                 {
-                    ERROR_LOG("Invalid expire entry for timeout delete error:%d", err);
+                    ERROR_LOG(
+                            "Invalid expire entry for timeout delete error:%d",
+                            err);
                 }
-                removed++;
-                if(break_expire_check)
-                {
-                    return 0 - removed;
-                }
+                ROUTINE_CB();
             }
         }
-        return removed;
+        return 0;
     }
 
     int MMKVImpl::Backup(const std::string& file)
@@ -983,7 +1044,8 @@ namespace mmkv
 
     int MMKVImpl::EnsureWritableValueSpace(size_t space_size)
     {
-        if (!m_readonly && (m_options.create_options.autoexpand || space_size > 0))
+        if (!m_readonly
+                && (m_options.create_options.autoexpand || space_size > 0))
         {
             if (m_segment.EnsureWritableValueSpace(space_size) > 0)
             {
@@ -999,9 +1061,9 @@ namespace mmkv
         return EnsureWritableValueSpace(space_size);
     }
 
-    int MMKVImpl::GetAllDBID(DBIDArray& ids)
+    int MMKVImpl::GetAllDBInfo(DBInfoArray& dbs)
     {
-        ids.clear();
+        dbs.clear();
         RWLockGuard<MemorySegmentManager, READ_LOCK> keylock_guard(m_segment);
         if (NULL == m_dbid_set)
         {
@@ -1010,7 +1072,20 @@ namespace mmkv
         DBIDSet::iterator it = m_dbid_set->begin();
         while (it != m_dbid_set->end())
         {
-            ids.push_back(*it);
+            MMKVTable* table = GetMMKVTable(*it, false);
+            if (NULL != table)
+            {
+                DBInfo info;
+                info.id = *it;
+                info.rehashing = table->rehashing();
+                info.rehash_progress = table->rehash_progress();
+                ExpireInfoSet* expires = GetDBExpireInfo(*it, false);
+                if (NULL != expires)
+                {
+                    info.expires = expires->set.size();
+                }
+                dbs.push_back(info);
+            }
             it++;
         }
         return 0;

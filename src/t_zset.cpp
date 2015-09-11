@@ -43,7 +43,7 @@ namespace mmkv
 {
     void MMKVImpl::AssignScoreValue(ScoreValue& sv, long double score, const Data& value)
     {
-        AssignObjectContent(sv.value, value, false);
+        m_segment.AssignObjectValue(sv.value, value, true);
         sv.score = score;
         return;
     }
@@ -74,7 +74,7 @@ namespace mmkv
 
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         EnsureWritableValueSpace();
-        Allocator<char> allocator = m_segment.ValueAllocator<char>();
+        Allocator<char> allocator = m_segment.MSpaceAllocator<char>();
         ZSet* zset = GetObject<ZSet>(db, key, V_TYPE_ZSET, xx ? false : true, err)(allocator);
         if (IS_NOT_EXISTS(err))
         {
@@ -314,7 +314,7 @@ namespace mmkv
 
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         EnsureWritableValueSpace();
-        Allocator<char> allocator = m_segment.ValueAllocator<char>();
+        Allocator<char> allocator = m_segment.MSpaceAllocator<char>();
         ZSet* zset = GetObject<ZSet>(db, key, V_TYPE_ZSET, true, err)(allocator);
         if (0 != err)
         {
@@ -1277,7 +1277,7 @@ namespace mmkv
         int err;
         RWLockGuard<MemorySegmentManager, WRITE_LOCK> keylock_guard(m_segment);
         EnsureWritableValueSpace();
-        Allocator<char> allocator = m_segment.ValueAllocator<char>();
+        Allocator<char> allocator = m_segment.MSpaceAllocator<char>();
         ZSet* destset = GetObject<ZSet>(db, destination, V_TYPE_ZSET, true, err)(allocator);
         if (0 != err)
         {
@@ -1446,7 +1446,7 @@ namespace mmkv
                 ret.first->second = cit->second;
             }
             ScoreValue sv;
-            sv.value = CloneStrObject(cit->first, false);
+            sv.value = CloneStrObject(cit->first);
             sv.score = cit->second;
             const_cast<Object&>(ret.first->first) = sv.value;
             destset->set.insert(sv);

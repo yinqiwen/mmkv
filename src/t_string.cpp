@@ -84,6 +84,10 @@ namespace mmkv
                 return ERR_INVALID_TYPE;
             }
             ClearTTL(db, kk, value_data);
+            if(value_data == tmpv && ttl == 0)
+            {
+                return 0;
+            }
             GenericDelValue(value_data);
         }
         else

@@ -106,7 +106,7 @@ namespace mmkv
 
     MemorySegmentManager::MemorySegmentManager() :
             m_readonly(false), m_lock_enable(false), m_named_objs(NULL), m_global_lock(
-                    NULL), m_data_buf(NULL)
+            NULL), m_data_buf(NULL)
     {
 
     }
@@ -168,6 +168,7 @@ namespace mmkv
 
         if (!m_global_lock->inited)
         {
+            memset(m_global_lock, 0, sizeof(MMLock));
             m_global_lock->inited = 1;
         }
 
@@ -177,9 +178,7 @@ namespace mmkv
         }
         else
         {
-            open_ret = data_buf.OpenWrite(data_path,
-                    open_options.create_options.size,
-                    open_options.create_if_notexist);
+            open_ret = data_buf.OpenWrite(data_path, open_options.create_options.size, open_options.create_if_notexist);
         }
 
         if (open_ret < 0)
@@ -207,14 +206,12 @@ namespace mmkv
         if (overwrite) //create file
         {
             meta->file_size = m_open_options.create_options.size;
-            meta->size = m_open_options.create_options.size - kHeaderLength
-                    - kMetaLength;
+            meta->size = m_open_options.create_options.size - kHeaderLength - kMetaLength;
             meta->size = allign_page(meta->size);
         }
 
         void* mspace_buf = (char*) meta + kHeaderLength + kMetaLength;
-        void* mspace = create_mspace_with_base(mspace_buf, meta->size, 0,
-                overwrite);
+        void* mspace = create_mspace_with_base(mspace_buf, meta->size, 0, overwrite);
 
         if (overwrite)
         {
@@ -226,8 +223,7 @@ namespace mmkv
         {
             StringObjectTableAllocator allocator(m_space_allocator);
             memset(header->named_objects, 0, sizeof(StringObjectTable));
-            ::new ((void*) (header->named_objects)) StringObjectTable(
-                    std::less<Object>(), allocator);
+            ::new ((void*) (header->named_objects)) StringObjectTable(std::less<Object>(), allocator);
         }
         m_named_objs = (StringObjectTable*) (header->named_objects);
         return 0;
@@ -294,12 +290,10 @@ namespace mmkv
         PostInit();
         meta = (Meta*) m_data_buf;
         meta->file_size = m_open_options.create_options.size;
-        meta->size = m_open_options.create_options.size - kHeaderLength
-                - kMetaLength;
+        meta->size = m_open_options.create_options.size - kHeaderLength - kMetaLength;
         void* value_mspace = (char*) m_data_buf + meta->mspace_offset;
         mspace_inc_size(value_mspace, inc);
-        INFO_LOG("Cost %lluus to expand store from %llu to %llu.",
-                get_current_micros() - micros, old_file_size, meta->file_size);
+        INFO_LOG("Cost %lluus to expand store from %llu to %llu.", get_current_micros() - micros, old_file_size, meta->file_size);
         return 1;
     }
 
@@ -339,8 +333,7 @@ namespace mmkv
         return true;
     }
 
-    bool MemorySegmentManager::AssignObjectValue(Object& obj, const Data& value,
-            bool try_int_encoding)
+    bool MemorySegmentManager::AssignObjectValue(Object& obj, const Data& value, bool try_int_encoding)
     {
         if (obj.IsInteger())
         {
@@ -399,8 +392,7 @@ namespace mmkv
         }
         for (int i = 0; i < kMaxReaderProcCount; i++)
         {
-            if (m_global_lock->readers[i].pid == get_current_pid()
-                    || m_global_lock->readers[i].pid == 0)
+            if (m_global_lock->readers[i].pid == get_current_pid() || m_global_lock->readers[i].pid == 0)
             {
                 m_global_lock->readers[i].pid = get_current_pid();
                 g_reader_count_index = i;
@@ -474,7 +466,17 @@ namespace mmkv
             if (kill(m_global_lock->writer_pid, 0) != 0)
             {
                 ERROR_LOG("Old write process crashed while writing.");
-                return false;
+                if (m_open_options.open_ignore_error)
+                {
+                    WARN_LOG("Clear write lock state since 'open_ignore_error' is setted.");
+                    m_global_lock->inited = true;
+                    memset(m_global_lock, 0, sizeof(MMLock));
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
             }
         }
         //clear dead readers lock state
@@ -497,8 +499,7 @@ namespace mmkv
         return true;
     }
 
-    static int dump_cksum_str(XXH64_state_t* cksm64, XXH32_state_t* cksm32,
-            const std::string& cksm_file, std::string& cksm)
+    static int dump_cksum_str(XXH64_state_t* cksm64, XXH32_state_t* cksm32, const std::string& cksm_file, std::string& cksm)
     {
         char xxhashsum[256];
         uint32_t offset = 0;
@@ -524,8 +525,7 @@ namespace mmkv
         fclose(dest_file);
     }
 
-    static void xxhash_cksum_callback(const void* data, uint32_t len,
-            void* cbdata)
+    static void xxhash_cksum_callback(const void* data, uint32_t len, void* cbdata)
     {
         void** tmp = (void**) cbdata;
         XXH64_state_t* cksm64 = (XXH64_state_t*) tmp[0];
@@ -609,10 +609,7 @@ namespace mmkv
         }
         xxhash_cksum_callback(header, header_len, chsumset);
         //compress & save key space
-        if (0
-                != lz4_compress_tofile((char*) key_space_start,
-                        (char*) key_mspace_top - (char*) key_space_start,
-                        dest_file, xxhash_cksum_callback, chsumset))
+        if (0 != lz4_compress_tofile((char*) key_space_start, (char*) key_mspace_top - (char*) key_space_start, dest_file, xxhash_cksum_callback, chsumset))
         {
             ERROR_LOG("Failed to compress key space content");
             err = -1;
@@ -653,8 +650,7 @@ namespace mmkv
         return err;
     }
 
-    int MemorySegmentManager::Restore(const std::string& from_file,
-            const std::string& to_file)
+    int MemorySegmentManager::Restore(const std::string& from_file, const std::string& to_file)
     {
         FILE* dest_file = NULL;
         int err = 0;
@@ -731,11 +727,9 @@ namespace mmkv
             goto _end;
         }
         memcpy(&header_len, backup.buf + buf_cursor, sizeof(uint32_t));
-        if (header_len > sizeof(Header)
-                || backup.size < buf_cursor + header_len + sizeof(uint32_t))
+        if (header_len > sizeof(Header) || backup.size < buf_cursor + header_len + sizeof(uint32_t))
         {
-            ERROR_LOG("Invalid header len:%u compare to %u", header_len,
-                    sizeof(Header));
+            ERROR_LOG("Invalid header len:%u compare to %u", header_len, sizeof(Header));
             err = -1;
             goto _end;
         }
@@ -747,8 +741,7 @@ namespace mmkv
         dest_file = fopen(to_file.c_str(), "w");
         if (NULL == dest_file)
         {
-            ERROR_LOG("Failed to open backup file:%s to write.",
-                    to_file.c_str());
+            ERROR_LOG("Failed to open backup file:%s to write.", to_file.c_str());
             err = -1;
             goto _end;
         }
@@ -771,9 +764,7 @@ namespace mmkv
         fseek(dest_file, kMetaLength + kHeaderLength, SEEK_SET);
 
         compressed_key_space = backup.buf + buf_cursor;
-        if (lz4_decompress_tofile(compressed_key_space,
-                backup.size - buf_cursor, dest_file, &chunk_decomp_size,
-                xxhash_cksum_callback, chsumset) != 0)
+        if (lz4_decompress_tofile(compressed_key_space, backup.size - buf_cursor, dest_file, &chunk_decomp_size, xxhash_cksum_callback, chsumset) != 0)
         {
             ERROR_LOG("decompress header content failed");
             err = -1;
@@ -812,9 +803,7 @@ namespace mmkv
             ERROR_LOG("Meta part is not equal.");
             return false;
         }
-        if (0
-                != memcmp((char*) m_data_buf + kMetaLength,
-                        cmpbuf.buf + kMetaLength, sizeof(Header)))
+        if (0 != memcmp((char*) m_data_buf + kMetaLength, cmpbuf.buf + kMetaLength, sizeof(Header)))
         {
             ERROR_LOG("Header part is not equal.");
             return false;
@@ -826,11 +815,9 @@ namespace mmkv
 
         char* other_key_mspace = cmpbuf.buf + meta->mspace_offset;
         char* other_key_space_start = cmpbuf.buf + kMetaLength + kHeaderLength;
-        char* other_key_mspace_stop = (char*) mspace_top_address(
-                other_key_mspace);
+        char* other_key_mspace_stop = (char*) mspace_top_address(other_key_mspace);
 
-        if (key_mspace_stop - key_space_start
-                != other_key_mspace_stop - other_key_space_start)
+        if (key_mspace_stop - key_space_start != other_key_mspace_stop - other_key_space_start)
         {
             WARN_LOG("Key space length is not equal.");
             return false;
@@ -840,12 +827,9 @@ namespace mmkv
         while (rest > 0)
         {
             size_t len = rest > 4096 ? 4096 : rest;
-            if (0
-                    != memcmp(key_space_start + cmpoff,
-                            other_key_space_start + cmpoff, len))
+            if (0 != memcmp(key_space_start + cmpoff, other_key_space_start + cmpoff, len))
             {
-                WARN_LOG("Key space  is not equal at offset:%llu with len:%u.",
-                        cmpoff, len);
+                WARN_LOG("Key space  is not equal at offset:%llu with len:%u.", cmpoff, len);
                 return false;
             }
             cmpoff += len;

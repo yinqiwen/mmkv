@@ -61,6 +61,7 @@ namespace mmkv
             bool reserve_space;
             bool use_lock;
             bool create_if_notexist;
+            bool open_ignore_error;
             uint32_t hll_sparse_max_bytes;
             LogLevel log_level;
             LoggerFunc* log_func;
@@ -69,10 +70,9 @@ namespace mmkv
             CreateOptions create_options;
 
             OpenOptions() :
-                    dir("./mmkv"), readonly(false), verify(true), reserve_space(
-                            false), use_lock(false), create_if_notexist(false), hll_sparse_max_bytes(
+                    dir("./mmkv"), readonly(false), verify(true), reserve_space(false), use_lock(false), create_if_notexist(false), open_ignore_error(false), hll_sparse_max_bytes(
                             3000), log_level(INFO_LOG_LEVEL), log_func(
-                    NULL), expire_cb(NULL),routine_cb(NULL)
+                    NULL), expire_cb(NULL), routine_cb(NULL)
             {
             }
     };
@@ -95,8 +95,7 @@ namespace mmkv
             PatternMap excludes;
             PatternArray get_patterns;
             GeoSearchOptions() :
-                    coord_type("mercator"), asc(true), radius(0), offset(0), limit(
-                            0), by_x(0), by_y(0)
+                    coord_type("mercator"), asc(true), radius(0), offset(0), limit(0), by_x(0), by_y(0)
             {
             }
     };

@@ -250,8 +250,6 @@ namespace mmkv
             // at least HT_MIN_BUCKETS.
             static const size_type HT_DEFAULT_STARTING_BUCKETS = 32;
         private:
-
-
             ht_alloc_type get_ht_allocator() const
             {
                 return rep[0]->get_allocator();
@@ -268,8 +266,6 @@ namespace mmkv
                 rehash_iter_pos = rep[0]->begin().pos;
                 return 0;
             }
-
-
 
             // This is the smallest size a hashtable can be without being too crowded
             // If you like, you can give a min #buckets as well as a min #elts
